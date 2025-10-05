@@ -1,0 +1,3 @@
+com.firefly.common.cqrs.config.CqrsAutoConfiguration
+com.firefly.common.cqrs.config.CqrsActuatorAutoConfiguration
+com.firefly.common.cqrs.config.RedisCacheAutoConfiguration

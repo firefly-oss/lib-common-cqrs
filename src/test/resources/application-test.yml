@@ -1,0 +1,31 @@
+# Test configuration for Firefly Common Domain library
+spring:
+  main:
+    banner-mode: off
+  cache:
+    type: simple
+  application:
+    name: firefly-common-domain-test
+
+# Firefly configuration for testing
+firefly:
+  cqrs:
+    enabled: true
+  events:
+    enabled: true
+    adapter: APPLICATION_EVENT
+  stepevents:
+    enabled: true
+
+# Logging configuration for tests
+logging:
+  level:
+    com.firefly: DEBUG
+    org.springframework: WARN
+    reactor: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Domain topic for testing
+domain:
+  topic: test-domain-events
