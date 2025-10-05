@@ -1,10 +1,44 @@
-# lib-common-cqrs
+# Firefly CQRS Framework Library
 
-**A powerful Spring Boot library implementing CQRS (Command Query Responsibility Segregation) pattern with reactive programming support, featuring zero-boilerplate handlers, automatic caching, and comprehensive authorization.**
+**Enterprise-grade CQRS implementation for Spring Boot applications**
 
-## 🚀 Quick Start
+*Zero-boilerplate • Reactive-first • Production-ready*
 
-### Maven Dependency
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Java](https://img.shields.io/badge/Java-21+-orange.svg)](https://openjdk.java.net/)
+[![Project Reactor](https://img.shields.io/badge/Project%20Reactor-3.x-blue.svg)](https://projectreactor.io/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+---
+
+## 🎯 **Why Firefly CQRS?**
+
+Building scalable, maintainable applications with clear separation between **commands** (write operations) and **queries** (read operations) shouldn't require extensive boilerplate code. The Firefly CQRS Framework Library eliminates complexity while providing enterprise-grade features out of the box.
+
+### ✨ **Key Benefits**
+
+- **🔥 Zero Boilerplate**: Write only business logic - everything else is automatic
+- **⚡ Reactive-First**: Built on Project Reactor for high-performance async processing
+- **🛡️ Enterprise Security**: Dual authorization with lib-common-auth integration + custom logic
+- **📊 Production-Ready Observability**: Built-in metrics, health checks, and actuator endpoints
+- **🎛️ Intelligent Caching**: Automatic cache key generation with Redis/Caffeine support
+- **🔧 Auto-Configuration**: Spring Boot auto-configuration with sensible defaults
+
+### 🏆 **What Makes It Different**
+
+| Feature | Traditional CQRS | Firefly CQRS |
+|---------|------------------|---------------|
+| Handler Setup | Manual registration, boilerplate | Annotation-based, automatic discovery |
+| Validation | Manual setup | Jakarta Bean Validation + custom async validation |
+| Caching | Manual cache management | Automatic cache key generation, TTL management |
+| Metrics | Custom metrics implementation | Built-in Micrometer integration with actuator endpoints |
+| Authorization | Custom authorization logic | Dual authorization: lib-common-auth + custom business logic |
+| Type Safety | Runtime type resolution errors | Compile-time generic type safety |
+| Context Propagation | Manual context passing | ExecutionContext with automatic propagation |
+
+## 🚀 **Quick Start - From Zero to CQRS in 5 Minutes**
+
+### 📦 **Installation**
 
 ```xml
 <dependency>
@@ -14,26 +48,64 @@
 </dependency>
 ```
 
-### Auto-Configuration
+### ⚙️ **Zero-Configuration Setup**
 
-The framework auto-configures when detected on the classpath:
+The framework auto-configures when detected on the classpath - **no manual configuration required:**
 
 ```java
 @SpringBootApplication
-public class MyApplication {
+public class BankingApplication {
     public static void main(String[] args) {
-        SpringApplication.run(MyApplication.class, args);
-        // ✅ CommandBus and QueryBus beans are automatically available
-        // ✅ MeterRegistry is auto-configured for metrics
-        // ✅ Validation, caching, and handler discovery are automatic
+        SpringApplication.run(BankingApplication.class, args);
+        
+        // ✅ CommandBus and QueryBus beans automatically available
+        // ✅ CommandMetricsService configured for production monitoring
+        // ✅ Jakarta Bean Validation enabled with custom validation support
+        // ✅ Handler discovery and registration automatic
+        // ✅ Actuator endpoints exposed: /actuator/cqrs, /actuator/cqrs/commands, etc.
+        // ✅ Authorization system ready with lib-common-auth integration
     }
 }
 ```
 
-### Your First Command Handler
+### 🎯 **Enable Observability (Optional)**
+
+```yaml
+# application.yml - Enable comprehensive monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,cqrs
+  endpoint:
+    cqrs:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        
+firefly:
+  cqrs:
+    command:
+      metrics-enabled: true
+    query:
+      metrics-enabled: true
+```
+
+### 💼 **Your First Command Handler**
+
+**Problem**: Traditional CQRS requires extensive setup, validation handling, metrics collection, and error management.
+
+**Solution**: Write only your business logic - everything else is automatic!
 
 ```java
-@CommandHandlerComponent(timeout = 30000, retries = 3, metrics = true)
+@CommandHandlerComponent(
+    timeout = 30000,    // 30-second timeout
+    retries = 3,        // 3 automatic retries with exponential backoff
+    metrics = true,     // Automatic metrics collection via CommandMetricsService
+    tracing = true      // Distributed tracing support
+)
 public class CreateAccountHandler extends CommandHandler<CreateAccountCommand, AccountResult> {
 
     @Autowired
@@ -41,27 +113,44 @@ public class CreateAccountHandler extends CommandHandler<CreateAccountCommand, A
 
     @Override
     protected Mono<AccountResult> doHandle(CreateAccountCommand command) {
-        // Only business logic - everything else is automatic!
+        // 🎯 Only business logic required - everything else is handled!
         return accountService.createAccount(command)
-            .map(account -> new AccountResult(
-                account.getAccountId(),
-                account.getCustomerId(),
-                "CREATED"
-            ));
+            .map(account -> AccountResult.builder()
+                .accountId(account.getAccountId())
+                .customerId(account.getCustomerId())
+                .status("CREATED")
+                .createdAt(Instant.now())
+                .build());
     }
 
-    // ✅ NO BOILERPLATE NEEDED:
-    // - No getCommandType() - automatically detected from generics
-    // - No validation setup - handled by Jakarta Bean Validation
-    // - No metrics setup - handled by @CommandHandlerComponent
-    // - No error handling - built-in
+    // ✅ ZERO BOILERPLATE - All handled automatically:
+    // • Command type detection via generics
+    // • Jakarta Bean Validation (@NotNull, @Valid, etc.)
+    // • Custom async validation (command.customValidate())
+    // • Authorization (lib-common-auth + command.authorize())
+    // • Metrics collection (firefly.cqrs.command.* metrics)
+    // • Error handling with retry logic
+    // • ExecutionContext propagation
+    // • Distributed tracing
 }
 ```
 
-### Your First Query Handler
+### 📊 **Your First Query Handler with Smart Caching**
+
+**Problem**: Implementing efficient caching requires cache key management, TTL handling, and eviction strategies.
+
+**Solution**: Declarative caching with automatic key generation!
 
 ```java
-@QueryHandlerComponent(cacheable = true, cacheTtl = 300, metrics = true)
+@QueryHandlerComponent(
+    cacheable = true,                           // Enable intelligent caching
+    cacheTtl = 300,                            // 5-minute cache TTL
+    cacheKeyFields = {"accountId", "currency"}, // Custom cache key fields
+    cacheKeyPrefix = "account_balance",         // Custom prefix
+    metrics = true,                            // Cache hit/miss metrics
+    autoEvictCache = true,                     // Auto-evict on related commands
+    evictOnCommands = {"TransferMoneyCommand", "UpdateAccountCommand"}
+)
 public class GetAccountBalanceHandler extends QueryHandler<GetAccountBalanceQuery, AccountBalance> {
 
     @Autowired
@@ -69,55 +158,73 @@ public class GetAccountBalanceHandler extends QueryHandler<GetAccountBalanceQuer
 
     @Override
     protected Mono<AccountBalance> doHandle(GetAccountBalanceQuery query) {
-        // Only business logic - caching and metrics handled automatically!
-        return accountService.getBalance(query.getAccountId())
-            .map(balance -> new AccountBalance(
-                query.getAccountId(),
-                balance,
-                Instant.now()
-            ));
+        // 🎯 Pure business logic - caching handled automatically!
+        return accountService.getBalance(query.getAccountId(), query.getCurrency())
+            .map(balance -> AccountBalance.builder()
+                .accountId(query.getAccountId())
+                .balance(balance)
+                .currency(query.getCurrency())
+                .lastUpdated(Instant.now())
+                .build());
     }
 
-    // ✅ NO CACHING BOILERPLATE NEEDED:
-    // - Cache key generation is automatic
-    // - TTL is configured via annotation
-    // - Cache eviction is handled automatically
+    // ✅ INTELLIGENT CACHING - All managed automatically:
+    // • Cache key: "account_balance_ACC123_USD" (auto-generated)
+    // • TTL management with configurable expiration
+    // • Cache hit/miss metrics (cache.gets with result tags)
+    // • Automatic eviction when TransferMoneyCommand executes
+    // • Redis/Caffeine support with zero configuration
+    // • Cache metrics in actuator endpoint /actuator/cqrs/queries
 }
 ```
 
-## 🎯 Features
+## 🎨 **Core Features & Architecture**
 
-### ✨ Zero-Boilerplate CQRS
-- **One Way to Do Things**: Only one approach - extend base classes with annotations
-- **Automatic Type Detection**: Generic types resolved automatically from handler classes
-- **Built-in Validation**: Jakarta Bean Validation annotations + custom validation support
-- **Smart Caching**: Automatic cache key generation and TTL management for queries
-- **Performance Metrics**: Built-in timing, success/failure tracking, and throughput metrics
+### ✨ **Zero-Boilerplate CQRS**
+- **🎯 Single Approach**: Only one way to do things - extend base classes with annotations
+- **🔄 Automatic Type Detection**: Generic types resolved at compilation time from handler classes
+- **✅ Built-in Validation**: Jakarta Bean Validation annotations + async custom validation support
+- **🎛️ Smart Caching**: Automatic cache key generation, TTL management, and eviction strategies
+- **📊 Performance Metrics**: Built-in CommandMetricsService with per-type breakdown and timing
 
-### 🔐 Comprehensive Authorization
-- **Dual Authorization**: Integration with lib-common-auth + custom authorization logic
-- **Context-Aware**: Uses ExecutionContext for tenant, user, and feature flag information
-- **Reactive**: Non-blocking authorization with Mono return types
-- **Configurable**: Flexible configuration through properties and environment variables
+### 🔐 **Enterprise Security & Authorization**
+- **🔁 Dual Authorization**: Seamless lib-common-auth integration + custom business authorization logic
+- **🌐 Context-Aware**: Rich ExecutionContext with tenant isolation, user context, and feature flags
+- **⚡ Reactive Security**: Non-blocking authorization with `Mono<AuthorizationResult>` return types
+- **🔧 Flexible Configuration**: Fine-grained control through properties and environment variables
 
-### 🎛️ Advanced Configuration
-- **Auto-Configuration**: Spring Boot auto-configuration with sensible defaults
-- **Property-Based**: Configure behavior through `application.yml`
-- **Environment Variables**: Override any configuration with environment variables
-- **Handler Discovery**: Automatic discovery and registration of handlers
+### 📊 **Production-Ready Observability**
+- **📱 Comprehensive Actuator Integration**: 
+  - `/actuator/cqrs` - Complete framework metrics overview
+  - `/actuator/cqrs/commands` - Command processing metrics
+  - `/actuator/cqrs/queries` - Query metrics with cache hit/miss rates
+  - `/actuator/cqrs/handlers` - Handler registry information
+  - `/actuator/cqrs/health` - Framework health status
+- **📍 Automatic Metrics Collection**: Real-time metrics via `CommandMetricsService`:
+  - `firefly.cqrs.command.processed` - Total successful commands
+  - `firefly.cqrs.command.failed` - Failed commands with error classification
+  - `firefly.cqrs.command.validation.failed` - Validation failures by phase
+  - `firefly.cqrs.command.processing.time` - Processing duration timers
+  - Per-command-type metrics with automatic tagging
+- **🔍 Health Monitoring**: CQRS component health checks with detailed status
+- **🔗 Distributed Tracing**: Automatic trace ID and correlation ID propagation
 
-### 🔍 Observability
-- **Actuator Integration**: Built-in health indicators and metrics endpoints
-- **Distributed Tracing**: Automatic trace ID and correlation ID propagation
-- **Custom Metrics**: Handler-specific metrics collection
-- **Health Checks**: CQRS system health monitoring
+### ⚡ **High-Performance & Resilience**
+- **🌊 Reactive Streams**: Built on Project Reactor for non-blocking, high-throughput processing
+- **⏱️ Timeout Management**: Per-handler configurable timeouts with circuit breaker integration
+- **🔄 Intelligent Retry Logic**: Exponential backoff with jitter for failure recovery
+- **🎛️ Multi-Level Caching**: 
+  - Local caching (Caffeine) for low-latency access
+  - Distributed caching (Redis) for cluster-wide consistency
+  - Automatic cache key generation with field-based customization
+  - TTL management and automatic eviction on related commands
 
-### ⚡ Performance & Resilience
-- **Reactive Streams**: Built on Project Reactor for high-performance async processing
-- **Timeout Management**: Configurable timeouts per handler
-- **Retry Logic**: Automatic retry with exponential backoff
-- **Circuit Breaker Ready**: Integration with Resilience4j patterns
-- **Redis Caching**: Optional Redis backend for distributed caching
+### 🔧 **Developer Experience**
+- **🛠️ Auto-Configuration**: Spring Boot auto-configuration with production-ready defaults
+- **📜 Comprehensive Documentation**: Real-world examples and patterns in [docs/](./docs/)
+- **📝 Property-Based Configuration**: YAML configuration with environment variable overrides
+- **🔍 Handler Discovery**: Automatic registration and type-safe handler discovery
+- **🧪 Type Safety**: Compile-time generic type validation prevents runtime errors
 
 ## 📖 Core Concepts
 
@@ -705,37 +812,347 @@ This library integrates seamlessly with lib-common-domain for complete DDD suppo
 - ExecutionContext: Context propagation across distributed services
 - Observability: Metrics, health checks, and distributed tracing
 
-## 📚 Examples
+## 🏦 **Real-World Example - Banking Application**
 
-For comprehensive examples, see the [docs/README.md](./docs/README.md) file which includes:
+See how Firefly CQRS eliminates complexity in a production banking application:
 
-- Complete banking application example
-- Multi-tenant application patterns
-- Advanced authorization scenarios
-- Performance optimization techniques
-- Testing strategies
-- Integration patterns with other Firefly libraries
+### 💳 **Command: Transfer Money Between Accounts**
 
-## 🤝 Contributing
+```java
+// 1. Define your command with validation
+public class TransferMoneyCommand implements Command<TransferResult> {
+    
+    @NotNull(message = "Source account required")
+    @Pattern(regexp = "^ACC-\\d{6}$", message = "Invalid account format")
+    private final String sourceAccountId;
+    
+    @NotNull @Positive
+    private final BigDecimal amount;
+    
+    @NotNull
+    private final String currency;
+    
+    // Constructor, getters...
+    
+    @Override
+    public Mono<ValidationResult> customValidate() {
+        // Custom business validation
+        if (sourceAccountId.equals(targetAccountId)) {
+            return Mono.just(ValidationResult.failure(
+                "targetAccountId", "Cannot transfer to same account"));
+        }
+        return Mono.just(ValidationResult.success());
+    }
+    
+    @Override
+    public Mono<AuthorizationResult> authorize(ExecutionContext context) {
+        // Custom authorization logic
+        return validateDailyLimits(context.getUserId(), amount)
+            .flatMap(withinLimits -> withinLimits 
+                ? Mono.just(AuthorizationResult.success())
+                : Mono.just(AuthorizationResult.failure("limits", 
+                    "Transfer exceeds daily limit")));
+    }
+}
 
-1. Follow the existing code style and patterns
-2. Write comprehensive tests for new features
-3. Update documentation for any API changes
-4. Use the annotation-based approach consistently
-5. Ensure zero-boilerplate philosophy is maintained
+// 2. Implement your handler (only business logic!)
+@CommandHandlerComponent(
+    timeout = 30000,
+    retries = 3,
+    metrics = true,
+    description = "Processes money transfers between accounts"
+)
+public class TransferMoneyHandler extends CommandHandler<TransferMoneyCommand, TransferResult> {
+    
+    @Autowired
+    private TransferService transferService;
+    
+    @Override
+    protected Mono<TransferResult> doHandle(TransferMoneyCommand command) {
+        // 🎯 Pure business logic - everything else handled automatically!
+        return transferService.processTransfer(
+            command.getSourceAccountId(),
+            command.getTargetAccountId(),
+            command.getAmount(),
+            command.getCurrency()
+        );
+    }
+    
+    // ✅ NO BOILERPLATE:
+    // - Validation: Handled by Jakarta Bean Validation + customValidate()
+    // - Authorization: lib-common-auth + authorize() method
+    // - Metrics: Automatic via CommandMetricsService
+    // - Retry logic: 3 retries with exponential backoff
+    // - Error handling: Built-in with proper error classification
+    // - Tracing: Automatic correlation ID and trace propagation
+}
+```
 
-## 📜 License
+### 📈 **Query: Get Account Balance with Smart Caching**
 
-Copyright 2025 Firefly Software Solutions Inc
+```java
+// 1. Define your query
+public class GetAccountBalanceQuery implements Query<AccountBalance> {
+    
+    @NotBlank
+    private final String accountId;
+    
+    private final String currency;
+    
+    // Constructor, getters...
+}
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+// 2. Implement your handler with intelligent caching
+@QueryHandlerComponent(
+    cacheable = true,
+    cacheTtl = 300,                                    // 5-minute cache
+    cacheKeyFields = {"accountId", "currency"},        // Custom cache key
+    cacheKeyPrefix = "account_balance",                // Prefix for clarity
+    autoEvictCache = true,
+    evictOnCommands = {"TransferMoneyCommand", "DepositMoneyCommand"},
+    metrics = true
+)
+public class GetAccountBalanceHandler extends QueryHandler<GetAccountBalanceQuery, AccountBalance> {
+    
+    @Autowired
+    private AccountService accountService;
+    
+    @Override
+    protected Mono<AccountBalance> doHandle(GetAccountBalanceQuery query) {
+        // 🎯 Business logic only - caching automatic!
+        return accountService.getBalance(query.getAccountId(), query.getCurrency())
+            .map(balance -> AccountBalance.builder()
+                .accountId(query.getAccountId())
+                .balance(balance)
+                .currency(query.getCurrency())
+                .lastUpdated(Instant.now())
+                .build());
+    }
+    
+    // ✅ INTELLIGENT CACHING:
+    // - Cache key: "account_balance_ACC123456_USD"
+    // - Automatic eviction when TransferMoneyCommand affects this account
+    // - Cache hit/miss metrics automatically collected
+    // - Redis/Caffeine support with zero configuration
+}
+```
 
-    http://www.apache.org/licenses/LICENSE-2.0
+### 🎐 **Using Commands & Queries in Your Controller**
+
+```java
+@RestController
+@RequestMapping("/api/banking")
+public class BankingController {
+    
+    private final CommandBus commandBus;
+    private final QueryBus queryBus;
+    
+    @PostMapping("/transfer")
+    public Mono<ResponseEntity<TransferResult>> transferMoney(
+            @RequestBody TransferRequest request,
+            @RequestHeader("Authorization") String authToken) {
+        
+        // Build rich execution context
+        ExecutionContext context = ExecutionContext.builder()
+            .userId(extractUserId(authToken))
+            .tenantId(extractTenantId(authToken))
+            .source("web-api")
+            .featureFlag("high-value-transfers", 
+                featureFlagService.isEnabled("high-value-transfers"))
+            .build();
+        
+        TransferMoneyCommand command = new TransferMoneyCommand(
+            request.getSourceAccountId(),
+            request.getTargetAccountId(),
+            request.getAmount(),
+            request.getCurrency()
+        );
+        
+        return commandBus.send(command, context)
+            .map(ResponseEntity::ok)
+            .onErrorResume(this::handleError);
+    }
+    
+    @GetMapping("/accounts/{accountId}/balance")
+    public Mono<ResponseEntity<AccountBalance>> getBalance(
+            @PathVariable String accountId,
+            @RequestParam(defaultValue = "USD") String currency) {
+        
+        GetAccountBalanceQuery query = new GetAccountBalanceQuery(accountId, currency);
+        
+        return queryBus.query(query)
+            .map(ResponseEntity::ok);
+    }
+}
+```
+
+### 📊 **Production Monitoring**
+
+```bash
+# Real-time CQRS metrics
+curl http://localhost:8080/actuator/cqrs
+
+# Command-specific metrics
+curl http://localhost:8080/actuator/cqrs/commands
+
+# Query cache performance
+curl http://localhost:8080/actuator/cqrs/queries
+```
+
+**Response includes comprehensive metrics:**
+```json
+{
+  "commands": {
+    "total_processed": 15420,
+    "success_rate": 98.7,
+    "avg_processing_time_ms": 85.3,
+    "by_type": {
+      "TransferMoneyCommand": {
+        "processed": 8950,
+        "failed": 12,
+        "avg_processing_time_ms": 95.2
+      }
+    }
+  },
+  "queries": {
+    "cache": {
+      "hit_rate": 87.4
+    }
+  }
+}
+```
+
+## 📚 **Complete Documentation**
+
+For comprehensive documentation and examples, see our **[Documentation Hub](./docs/README.md)**:
+
+### 🎆 **Getting Started**
+- **[🚀 Quick Start Guide](./docs/QUICKSTART.md)** - Complete setup in 5 minutes with working examples
+- **[🔧 Configuration Guide](./docs/CONFIGURATION.md)** - Complete configuration reference with real metrics endpoints
+
+### 🏗️ **Architecture & Design**  
+- **[🏢 Architecture Overview](./docs/ARCHITECTURE.md)** - Deep dive into CQRS patterns, CommandMetricsService, and actuator endpoints
+- **[📝 Developer Guide](./docs/DEVELOPER_GUIDE.md)** - Comprehensive development patterns with production observability
+
+### 📦 **What's Included**
+- **✅ Real Implementation Examples** - Code from the actual lib-common-cqrs codebase
+- **✅ Production Monitoring** - Complete CommandMetricsService integration and actuator endpoints
+- **✅ Enterprise Security** - lib-common-auth integration + custom authorization patterns
+- **✅ Performance Optimization** - Intelligent caching strategies and reactive patterns
+- **✅ Testing Methodologies** - Unit, integration, and end-to-end testing approaches
+- **✅ Real Metrics** - Actual `firefly.cqrs.*` metrics with Prometheus integration
+
+### 📈 **Monitoring & Observability**
+
+The framework provides **production-ready observability** out of the box:
+
+```bash
+# Framework overview with uptime, handler counts, and health
+GET /actuator/cqrs
+
+# Command metrics: success rates, processing times, per-type breakdown
+GET /actuator/cqrs/commands  
+
+# Query metrics: cache hit rates, processing performance
+GET /actuator/cqrs/queries
+
+# Handler registry: registered command/query handlers
+GET /actuator/cqrs/handlers
+
+# Component health: CommandBus, QueryBus, metrics service status
+GET /actuator/cqrs/health
+```
+
+**Automatic Metrics Collection:**
+- `firefly.cqrs.command.processed` - Success counters
+- `firefly.cqrs.command.failed` - Failure counters with error classification
+- `firefly.cqrs.command.processing.time` - Processing duration timers
+- Per-command-type metrics with automatic tagging
+- Cache hit/miss rates for queries
+- Validation failure tracking by phase
+
+---
+
+## 🚀 **Ready to Get Started?**
+
+### **1️⃣ Add the Dependency**
+```xml
+<dependency>
+    <groupId>com.firefly</groupId>
+    <artifactId>lib-common-cqrs</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+</dependency>
+```
+
+### **2️⃣ Enable Monitoring**
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: cqrs
+firefly:
+  cqrs:
+    command:
+      metrics-enabled: true
+```
+
+### **3️⃣ Create Your First Handler**
+```java
+@CommandHandlerComponent(metrics = true)
+public class MyHandler extends CommandHandler<MyCommand, MyResult> {
+    @Override
+    protected Mono<MyResult> doHandle(MyCommand command) {
+        return Mono.just(new MyResult("Success!"));
+    }
+}
+```
+
+### **4️⃣ Check Your Metrics**
+```bash
+curl http://localhost:8080/actuator/cqrs
+```
+
+**That's it!** 🎉 You now have enterprise-grade CQRS with zero boilerplate.
+
+---
+
+### 💬 **Questions? Issues? Contributions?**
+
+- **📆 Documentation**: Complete guides in [`docs/`](./docs/)
+- **🐛 Issues**: Report bugs or request features
+- **💬 Discussions**: Ask questions and share use cases
+- **🤝 Contributing**: We welcome contributions!
+
+### ✨ **Contributing Guidelines**
+
+1. **🎨 Follow Existing Patterns**: Use annotation-based approach consistently
+2. **🧪 Write Tests**: Comprehensive test coverage for new features
+3. **📝 Update Documentation**: Keep docs current with API changes
+4. **🔥 Zero-Boilerplate Philosophy**: Maintain the "business logic only" approach
+5. **📈 Include Metrics**: Ensure new features have appropriate observability
+
+---
+
+## 📜 **License**
+
+**Copyright 2025 Firefly Software Solutions Inc**
+
+Licensed under the Apache License, Version 2.0 (the "License").
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+---
+
+<div align="center">
+
+**🚀 Built with ❤️ by Firefly Software Solutions**
+
+*Enterprise-grade CQRS • Zero boilerplate • Production ready*
+
+</div>
