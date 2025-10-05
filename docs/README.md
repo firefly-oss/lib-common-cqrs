@@ -1,134 +1,192 @@
-# lib-common-cqrs - Detailed Documentation
+# lib-common-cqrs Documentation
 
-**Comprehensive CQRS implementation with reactive programming, zero-boilerplate handlers, and enterprise-grade features.**
+**Enterprise-grade CQRS framework with reactive programming, zero-boilerplate handlers, and comprehensive observability.**
 
-## 📑 Table of Contents
+## 📖 Documentation Index
 
-1. [Architecture Overview](#architecture-overview)
-2. [Core Components](#core-components)
-3. [Handler Implementation Patterns](#handler-implementation-patterns)
-4. [Validation Framework](#validation-framework)
-5. [Authorization System](#authorization-system)
-6. [Caching Strategy](#caching-strategy)
-7. [Metrics & Observability](#metrics--observability)
-8. [Configuration Reference](#configuration-reference)
-9. [Advanced Usage](#advanced-usage)
-10. [Performance Tuning](#performance-tuning)
-11. [Testing Strategies](#testing-strategies)
-12. [Complete Examples](#complete-examples)
+### Getting Started
+- **[Quick Start Guide](QUICKSTART.md)** - Get up and running in 5 minutes
+- **[Installation & Configuration](CONFIGURATION.md)** - Detailed setup and configuration options
 
-## 🏗️ Architecture Overview
+### Architecture & Design
+- **[Architecture Overview](ARCHITECTURE.md)** - Deep dive into framework design and patterns
+- **[Core Components](CORE_COMPONENTS.md)** - Detailed documentation of interfaces and classes
+- **[Design Patterns](DESIGN_PATTERNS.md)** - CQRS patterns and best practices
 
-### CQRS Pattern Implementation
+### Developer Guides
+- **[Developer Guide](DEVELOPER_GUIDE.md)** - Comprehensive development reference
+- **[Handler Implementation](HANDLER_GUIDE.md)** - Command and Query handler patterns
+- **[Authorization System](AUTHORIZATION.md)** - Security and access control
+- **[Validation Framework](VALIDATION.md)** - Input validation and business rules
 
-The lib-common-cqrs library implements the Command Query Responsibility Segregation (CQRS) pattern with a focus on developer productivity and operational excellence.
+### Advanced Topics
+- **[Advanced Features](ADVANCED_FEATURES.md)** - Caching, metrics, tracing, and more
+- **[Performance Tuning](PERFORMANCE.md)** - Optimization strategies and best practices
+- **[Testing Strategies](TESTING.md)** - Unit, integration, and end-to-end testing
+- **[Integration Patterns](INTEGRATION.md)** - Working with other systems
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    CQRS Framework Architecture                                              │
-├─────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                                             │
-│  ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐   │
-│  │   Command Side      │    │   Query Side        │    │   Execution         │    │   Cross-Cutting     │   │
-│  │                     │    │                     │    │   Context           │    │   Concerns          │   │
-│  │ ┌─────────────────┐ │    │ ┌─────────────────┐ │    │ ┌─────────────────┐ │    │ ┌─────────────────┐ │   │
-│  │ │ CommandBus      │ │    │ │ QueryBus        │ │    │ │ ExecutionContext│ │    │ │ Authorization   │ │   │
-│  │ │ - Send          │ │    │ │ - Query         │ │    │ │ - User Context  │ │    │ │ Service         │ │   │
-│  │ │ - Validation    │ │    │ │ - Caching       │ │    │ │ - Tenant Info   │ │    │ │ - lib-common-   │ │   │
-│  │ │ - Authorization │ │    │ │ - Authorization │ │    │ │ - Feature Flags │ │    │ │   auth          │ │   │
-│  │ │ - Metrics       │ │    │ │ - Metrics       │ │    │ │ - Session Data  │ │    │ │ - Custom Logic  │ │   │
-│  │ └─────────────────┘ │    │ └─────────────────┘ │    │ └─────────────────┘ │    │ └─────────────────┘ │   │
-│  │ ┌─────────────────┐ │    │ ┌─────────────────┐ │    │ ┌─────────────────┐ │    │ ┌─────────────────┐ │   │
-│  │ │ CommandHandler  │ │    │ │ QueryHandler    │ │    │ │ Context         │ │    │ │ Validation      │ │   │
-│  │ │ Registry        │ │    │ │ Registry        │ │    │ │ Propagation     │ │    │ │ Framework       │ │   │
-│  │ └─────────────────┘ │    │ └─────────────────┘ │    │ └─────────────────┘ │    │ │ - Jakarta       │ │   │
-│  │ ┌─────────────────┐ │    │ ┌─────────────────┐ │    │                     │    │ │ - Custom Rules  │ │   │
-│  │ │ @CommandHandler │ │    │ │ @QueryHandler   │ │    │                     │    │ └─────────────────┘ │   │
-│  │ │ Components      │ │    │ │ Components      │ │    │                     │    │ ┌─────────────────┐ │   │
-│  │ └─────────────────┘ │    │ └─────────────────┘ │    │                     │    │ │ Metrics &       │ │   │
-│  └─────────────────────┘    └─────────────────────┘    └─────────────────────┘    │ │ Tracing         │ │   │
-│                                                                                   │ │ - Micrometer    │ │   │
-│                                                                                   │ │ - Spring        │ │   │
-│                                                                                   │ │   Actuator      │ │   │
-│                                                                                   │ └─────────────────┘ │   │
-│                                                                                   └─────────────────────┘   │
-│                                                                                                             │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-```
+### Reference
+- **[Configuration Reference](CONFIGURATION_REFERENCE.md)** - Complete configuration options
+- **[API Reference](API_REFERENCE.md)** - Complete class and method documentation
+- **[Migration Guide](MIGRATION.md)** - Upgrading from previous versions
 
-### Key Architectural Principles
+## 🏗️ Framework Overview
 
-1. **Separation of Concerns**: Commands handle state changes, queries handle data retrieval
-2. **Zero Boilerplate**: Annotations and base classes eliminate repetitive code
-3. **Reactive First**: Built on Project Reactor for non-blocking operations
-4. **Type Safety**: Generic type resolution ensures compile-time safety
-5. **Extensibility**: Hook points for custom validation, authorization, and processing
+lib-common-cqrs is a production-ready CQRS framework that provides:
 
-## 🔧 Core Components
-
-### Command Interface
-
-The Command interface is a marker interface that all commands must implement:
-
+### ✨ Zero-Boilerplate Development
 ```java
-public interface Command<R> {
+@CommandHandlerComponent
+public class CreateAccountHandler extends CommandHandler<CreateAccountCommand, AccountResult> {
     
-    // Metadata methods with intelligent defaults
-    default String getCommandId() { return UUID.randomUUID().toString(); }
-    default Instant getTimestamp() { return Instant.now(); }
-    default String getCorrelationId() { return null; }
-    default String getInitiatedBy() { return null; }
-    default Map<String, Object> getMetadata() { return null; }
+    @Override
+    protected Mono<AccountResult> doHandle(CreateAccountCommand command) {
+        // Only business logic needed - everything else is automatic!
+        return accountService.createAccount(command);
+    }
     
-    // Type resolution
-    default Class<R> getResultType() { return (Class<R>) Object.class; }
-    
-    // Validation hooks
-    default Mono<ValidationResult> validate() { return customValidate(); }
-    default Mono<ValidationResult> customValidate() { return Mono.just(ValidationResult.success()); }
-    
-    // Authorization hooks
-    default Mono<AuthorizationResult> authorize() { return Mono.just(AuthorizationResult.success()); }
-    default Mono<AuthorizationResult> authorize(ExecutionContext context) { return authorize(); }
+    // ✅ NO BOILERPLATE:
+    // - Type detection from generics
+    // - Automatic validation 
+    // - Built-in metrics & tracing
+    // - Handler registration
 }
 ```
 
-### Query Interface
+### 🔐 Enterprise Security
+- **Dual Authorization**: lib-common-auth integration + custom logic
+- **Context-Aware**: Multi-tenant, user, and feature flag support
+- **Reactive**: Non-blocking authorization with Mono return types
 
-The Query interface provides caching capabilities and authorization:
+### ⚡ High Performance
+- **Reactive Streams**: Built on Project Reactor
+- **Smart Caching**: Automatic cache key generation and TTL management
+- **Circuit Breakers**: Built-in resilience patterns
+
+### 🔍 Full Observability
+- **Metrics**: Built-in timing, success/failure, throughput tracking
+- **Tracing**: Distributed tracing with correlation IDs
+- **Health Checks**: Comprehensive system health monitoring
+
+## 🚀 Quick Example
 
 ```java
-public interface Query<R> {
+// 1. Define your command
+@Data
+public class TransferMoneyCommand implements Command<TransferResult> {
+    @NotNull private final String sourceAccountId;
+    @NotNull private final String targetAccountId;
+    @NotNull @Positive private final BigDecimal amount;
     
-    // Metadata methods
-    default String getQueryId() { return UUID.randomUUID().toString(); }
-    default Instant getTimestamp() { return Instant.now(); }
-    default String getCorrelationId() { return null; }
-    default String getInitiatedBy() { return null; }
-    default Map<String, Object> getMetadata() { return null; }
+    @Override
+    public Mono<ValidationResult> customValidate() {
+        if (sourceAccountId.equals(targetAccountId)) {
+            return Mono.just(ValidationResult.failure("targetAccountId", 
+                "Cannot transfer to the same account"));
+        }
+        return Mono.just(ValidationResult.success());
+    }
+}
+
+// 2. Create your handler
+@CommandHandlerComponent(timeout = 30000, metrics = true)
+public class TransferMoneyHandler extends CommandHandler<TransferMoneyCommand, TransferResult> {
     
-    // Type resolution
-    default Class<R> getResultType() { return (Class<R>) Object.class; }
+    @Autowired
+    private AccountService accountService;
     
-    // Caching support
-    default boolean isCacheable() { return true; }
-    default String getCacheKey() { /* intelligent key generation */ }
+    @Override
+    protected Mono<TransferResult> doHandle(TransferMoneyCommand command) {
+        return accountService.transferMoney(
+            command.getSourceAccountId(),
+            command.getTargetAccountId(), 
+            command.getAmount()
+        );
+    }
+}
+
+// 3. Use it
+@RestController
+public class TransferController {
     
-    // Authorization hooks
-    default Mono<AuthorizationResult> authorize() { return Mono.just(AuthorizationResult.success()); }
-    default Mono<AuthorizationResult> authorize(ExecutionContext context) { return authorize(); }
+    @Autowired
+    private CommandBus commandBus;
+    
+    @PostMapping("/transfer")
+    public Mono<TransferResult> transfer(@RequestBody TransferRequest request,
+                                       @RequestHeader("Authorization") String token) {
+        
+        ExecutionContext context = ExecutionContext.builder()
+            .withUserId(extractUserFromToken(token))
+            .withSource("web-app")
+            .build();
+            
+        TransferMoneyCommand command = new TransferMoneyCommand(
+            request.getSourceAccountId(),
+            request.getTargetAccountId(),
+            request.getAmount()
+        );
+        
+        return commandBus.send(command, context);
+    }
 }
 ```
 
-## 📚 Examples
+## 🎯 Key Features by Category
 
-For comprehensive examples and usage patterns, see the main [README.md](../README.md) which includes:
+### Commands & Queries
+- **Type-Safe**: Generic type resolution eliminates casting
+- **Validation**: Jakarta Bean Validation + custom business rules
+- **Authorization**: Built-in security with context awareness
+- **Metadata**: Rich context with correlation IDs and audit trails
 
-- Banking application example with complete command and query handlers
-- Multi-tenant application patterns
-- Advanced authorization scenarios
-- Performance optimization techniques
-- Testing strategies
-- Integration patterns with other Firefly libraries
+### Handlers
+- **Auto-Registration**: Annotate and forget - handlers are found automatically  
+- **Context-Aware**: Access user, tenant, feature flags in handlers
+- **Reactive**: Native Mono/Flux support for non-blocking operations
+- **Configurable**: Timeouts, retries, and behavior per handler
 
-This detailed documentation provides the architectural foundation and core concepts. The main README contains extensive working examples demonstrating all features in real-world scenarios.
+### Execution Context
+- **Multi-Tenant**: Built-in tenant and organization isolation
+- **Feature Flags**: Dynamic feature enablement
+- **User Context**: Authentication and authorization context
+- **Custom Properties**: Extensible context for any use case
+
+### Observability
+- **Actuator Integration**: Health indicators and custom endpoints
+- **Micrometer Metrics**: Success/failure rates, timing, throughput
+- **Distributed Tracing**: Correlation ID propagation
+- **Health Monitoring**: CQRS system health and diagnostics
+
+### Caching
+- **Query Caching**: Automatic result caching with configurable TTL
+- **Cache Eviction**: Smart eviction based on command relationships
+- **Multiple Backends**: Local, Redis, Caffeine support
+- **Cache Keys**: Intelligent key generation with customization
+
+## 📋 System Requirements
+
+- **Java**: 21+
+- **Spring Boot**: 3.1+
+- **Project Reactor**: 3.5+ (included transitively)
+- **Optional**: Redis for distributed caching
+- **Optional**: lib-common-auth for enhanced security
+
+## 🤝 Getting Help
+
+- **Documentation**: Start with [Quick Start Guide](QUICKSTART.md)
+- **Examples**: See [Developer Guide](DEVELOPER_GUIDE.md) for comprehensive examples
+- **Configuration**: Check [Configuration Reference](CONFIGURATION_REFERENCE.md)
+- **Troubleshooting**: See [Architecture Overview](ARCHITECTURE.md) for internals
+
+## 📚 Related Libraries
+
+This library works seamlessly with other Firefly components:
+
+- **[lib-common-domain](../../lib-common-domain)** - Domain events, service clients, resilience
+- **[lib-common-auth](../../lib-common-auth)** - Authentication and authorization
+- **[lib-transactional-engine](../../lib-transactional-engine)** - Saga orchestration
+
+---
+
+*Built with ❤️ by Firefly Software Solutions Inc.*
