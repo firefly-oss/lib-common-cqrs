@@ -25,27 +25,19 @@ public class TestAuthorizationProperties {
 
     /**
      * Creates default authorization properties for testing.
-     * 
+     *
      * @return AuthorizationProperties with default test configuration
      */
     public static AuthorizationProperties createDefault() {
         AuthorizationProperties properties = new AuthorizationProperties();
         properties.setEnabled(true);
-        
-        // Configure lib-common-auth
-        AuthorizationProperties.LibCommonAuth libCommonAuth = new AuthorizationProperties.LibCommonAuth();
-        libCommonAuth.setEnabled(true);
-        libCommonAuth.setFailFast(false);
-        libCommonAuth.setRequireBoth(false);
-        properties.setLibCommonAuth(libCommonAuth);
-        
+
         // Configure custom authorization
         AuthorizationProperties.Custom custom = new AuthorizationProperties.Custom();
         custom.setEnabled(true);
-        custom.setAllowOverride(true);
         custom.setTimeoutMs(5000);
         properties.setCustom(custom);
-        
+
         // Configure logging
         AuthorizationProperties.Logging logging = new AuthorizationProperties.Logging();
         logging.setEnabled(true);
@@ -53,7 +45,7 @@ public class TestAuthorizationProperties {
         logging.setLogPerformance(true);
         logging.setLevel("INFO");
         properties.setLogging(logging);
-        
+
         // Configure performance
         AuthorizationProperties.Performance performance = new AuthorizationProperties.Performance();
         performance.setCacheEnabled(false);
@@ -61,13 +53,13 @@ public class TestAuthorizationProperties {
         performance.setCacheMaxSize(1000);
         performance.setAsyncEnabled(false);
         properties.setPerformance(performance);
-        
+
         return properties;
     }
 
     /**
      * Creates authorization properties with authorization disabled.
-     * 
+     *
      * @return AuthorizationProperties with authorization disabled
      */
     public static AuthorizationProperties createDisabled() {
@@ -77,44 +69,30 @@ public class TestAuthorizationProperties {
     }
 
     /**
-     * Creates authorization properties with only lib-common-auth enabled.
-     * 
-     * @return AuthorizationProperties with only lib-common-auth enabled
-     */
-    public static AuthorizationProperties createLibCommonAuthOnly() {
-        AuthorizationProperties properties = createDefault();
-        properties.getCustom().setEnabled(false);
-        return properties;
-    }
-
-    /**
      * Creates authorization properties with only custom authorization enabled.
-     * 
-     * @return AuthorizationProperties with only custom authorization enabled
+     *
+     * @return AuthorizationProperties with custom authorization enabled
      */
     public static AuthorizationProperties createCustomOnly() {
         AuthorizationProperties properties = createDefault();
-        properties.getLibCommonAuth().setEnabled(false);
+        properties.getCustom().setEnabled(true);
         return properties;
     }
 
     /**
      * Creates authorization properties with strict security settings.
-     * 
+     *
      * @return AuthorizationProperties with strict security configuration
      */
     public static AuthorizationProperties createStrict() {
         AuthorizationProperties properties = createDefault();
-        properties.getLibCommonAuth().setFailFast(true);
-        properties.getLibCommonAuth().setRequireBoth(true);
-        properties.getCustom().setAllowOverride(false);
         properties.getCustom().setTimeoutMs(2000);
         return properties;
     }
 
     /**
      * Creates authorization properties with verbose logging enabled.
-     * 
+     *
      * @return AuthorizationProperties with verbose logging
      */
     public static AuthorizationProperties createVerbose() {
