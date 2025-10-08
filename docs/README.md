@@ -54,7 +54,7 @@ public class CreateAccountHandler extends CommandHandler<CreateAccountCommand, A
 ```
 
 ### 🔐 Enterprise Security
-- **Dual Authorization**: lib-common-auth integration + custom logic
+- **Custom Authorization**: Flexible custom business authorization logic
 - **Context-Aware**: Multi-tenant, user, and feature flag support
 - **Reactive**: Non-blocking authorization with Mono return types
 
@@ -170,7 +170,6 @@ public class TransferController {
 - **Spring Boot**: 3.1+
 - **Project Reactor**: 3.5+ (included transitively)
 - **Optional**: Redis for distributed caching
-- **Optional**: lib-common-auth for enhanced security
 
 ## 🤝 Getting Help
 
@@ -184,7 +183,6 @@ public class TransferController {
 This library works seamlessly with other Firefly components:
 
 - **[lib-common-domain](../../lib-common-domain)** - Domain events, service clients, resilience
-- **[lib-common-auth](../../lib-common-auth)** - Authentication and authorization
 - **[lib-transactional-engine](../../lib-transactional-engine)** - Saga orchestration
 
 ---

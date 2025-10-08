@@ -19,7 +19,7 @@ Building scalable, maintainable applications with clear separation between **com
 
 - **🔥 Zero Boilerplate**: Write only business logic - everything else is automatic
 - **⚡ Reactive-First**: Built on Project Reactor for high-performance async processing
-- **🛡️ Enterprise Security**: Dual authorization with lib-common-auth integration + custom logic
+- **🛡️ Enterprise Security**: Custom authorization logic with context-aware access control
 - **📊 Production-Ready Observability**: Built-in metrics, health checks, and actuator endpoints
 - **🎛️ Intelligent Caching**: Automatic cache key generation via lib-common-cache (Redis/Caffeine support)
 - **🔧 Auto-Configuration**: Spring Boot auto-configuration with sensible defaults
@@ -32,7 +32,7 @@ Building scalable, maintainable applications with clear separation between **com
 | Validation | Manual setup | Jakarta Bean Validation + custom async validation |
 | Caching | Manual cache management | Automatic cache key generation via lib-common-cache |
 | Metrics | Custom metrics implementation | Built-in Micrometer integration with actuator endpoints |
-| Authorization | Custom authorization logic | Dual authorization: lib-common-auth + custom business logic |
+| Authorization | Custom authorization logic | Custom business authorization with context-aware access control |
 | Type Safety | Runtime type resolution errors | Compile-time generic type safety |
 | Context Propagation | Manual context passing | ExecutionContext with automatic propagation |
 
@@ -70,7 +70,7 @@ public class BankingApplication {
         // ✅ Jakarta Bean Validation enabled with custom validation support
         // ✅ Handler discovery and registration automatic
         // ✅ Actuator endpoints exposed: /actuator/cqrs, /actuator/cqrs/commands, etc.
-        // ✅ Authorization system ready with lib-common-auth integration
+        // ✅ Authorization system ready with custom authorization logic
     }
 }
 ```
@@ -134,7 +134,7 @@ public class CreateAccountHandler extends CommandHandler<CreateAccountCommand, A
     // • Command type detection via generics
     // • Jakarta Bean Validation (@NotNull, @Valid, etc.)
     // • Custom async validation (command.customValidate())
-    // • Authorization (lib-common-auth + command.authorize())
+    // • Authorization (command.authorize() with custom logic)
     // • Metrics collection (firefly.cqrs.command.* metrics)
     // • Error handling with retry logic
     // • ExecutionContext propagation
@@ -195,7 +195,7 @@ public class GetAccountBalanceHandler extends QueryHandler<GetAccountBalanceQuer
 - **📊 Performance Metrics**: Built-in CommandMetricsService with per-type breakdown and timing
 
 ### 🔐 **Enterprise Security & Authorization**
-- **🔁 Dual Authorization**: Seamless lib-common-auth integration + custom business authorization logic
+- **🔁 Custom Authorization**: Flexible custom business authorization logic
 - **🌐 Context-Aware**: Rich ExecutionContext with tenant isolation, user context, and feature flags
 - **⚡ Reactive Security**: Non-blocking authorization with `Mono<AuthorizationResult>` return types
 - **🔧 Flexible Configuration**: Fine-grained control through properties and environment variables
@@ -300,7 +300,10 @@ public class GetTransactionHistoryQuery implements Query<TransactionHistory> {
     @Override
     public String getCacheKey() {
         // Custom cache key for better cache utilization
-        return String.format("txn_history_%s_%s_%s_%d", 
+        // Note: The framework will automatically prefix this with ":cqrs:"
+        // Final key will be "firefly:cache:default::cqrs:txn_history:..." after
+        // lib-common-cache adds its "firefly:cache:{cacheName}:" prefix
+        return String.format("txn_history:%s:%s:%s:%d",
             accountId, fromDate, toDate, limit);
     }
 }
@@ -470,9 +473,6 @@ firefly:
       metrics-enabled: true     # Enable query metrics
     authorization:
       enabled: true             # Enable authorization
-      lib-common-auth:
-        enabled: true           # Enable lib-common-auth integration
-        fail-fast: false        # Continue to custom auth if lib-common-auth fails
       custom:
         enabled: true           # Enable custom authorization
         timeout-ms: 5000        # Custom authorization timeout
@@ -497,7 +497,7 @@ FIREFLY_CQRS_QUERY_CACHE_TTL=5m
 
 # Authorization settings
 FIREFLY_CQRS_AUTHORIZATION_ENABLED=true
-FIREFLY_CQRS_AUTHORIZATION_LIB_COMMON_AUTH_ENABLED=true
+FIREFLY_CQRS_AUTHORIZATION_CUSTOM_ENABLED=true
 ```
 
 ### Cache Configuration via lib-common-cache
@@ -522,8 +522,13 @@ firefly:
 
   cqrs:
     query:
-      cache-name: query-cache  # Name of the cache to use for queries
       caching-enabled: true    # Enable query caching
+
+# Note: All CQRS cache keys are automatically prefixed with ":cqrs:"
+# Combined with lib-common-cache's "firefly:cache:{cacheName}:" prefix, final keys are:
+#   - Caffeine: "firefly:cache:default::cqrs:QueryName"
+#   - Redis: "firefly:cache:default::cqrs:QueryName"
+# The double colon (::) provides clear visual separation between cache infrastructure and CQRS namespace
 ```
 
 #### Caffeine (Local Cache) Configuration
@@ -573,17 +578,18 @@ firefly:
     enabled: true
     provider: redis
     default-ttl: 300s
-
-    # Per-cache configuration
-    caches:
-      query-cache:                      # Specific config for query cache
-        ttl: PT15M                      # 15-minute TTL
-        maximum-size: 5000              # Larger cache for queries
+    ttl: PT15M                          # 15-minute TTL
+    maximum-size: 5000                  # Larger cache size
 
   cqrs:
     query:
-      cache-name: query-cache
       caching-enabled: true
+
+# Note: CQRS uses namespace prefixing (:cqrs:) for all query cache keys
+# Combined with lib-common-cache's "firefly:cache:{cacheName}:" prefix, final keys are:
+#   - Caffeine: "firefly:cache:default::cqrs:QueryName"
+#   - Redis: "firefly:cache:default::cqrs:QueryName"
+# The double colon (::) provides clear visual separation
 ```
 
 #### Migration from Old Cache Configuration
@@ -629,19 +635,7 @@ For detailed migration instructions, see [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.
 
 ### Built-in Authorization Patterns
 
-#### 1. lib-common-auth Integration
-Integrates with the Firefly authentication system:
-
-```java
-@RequiresRole("CUSTOMER")
-@RequiresScope("accounts.transfer")  
-@RequiresOwnership(resource = "account", paramName = "sourceAccountId")
-public class TransferMoneyCommand implements Command<TransferResult> {
-    // Command implementation
-}
-```
-
-#### 2. Custom Authorization
+#### Custom Authorization
 Implement custom business logic authorization:
 
 ```java
@@ -666,7 +660,7 @@ public class TransferMoneyCommand implements Command<TransferResult> {
 }
 ```
 
-#### 3. Context-Aware Authorization
+#### Context-Aware Authorization
 Use ExecutionContext for tenant-aware and feature-flag-based authorization:
 
 ```java
@@ -993,7 +987,7 @@ public class TransferMoneyHandler extends CommandHandler<TransferMoneyCommand, T
     
     // ✅ NO BOILERPLATE:
     // - Validation: Handled by Jakarta Bean Validation + customValidate()
-    // - Authorization: lib-common-auth + authorize() method
+    // - Authorization: Custom authorize() method with business logic
     // - Metrics: Automatic via CommandMetricsService
     // - Retry logic: 3 retries with exponential backoff
     // - Error handling: Built-in with proper error classification
@@ -1150,7 +1144,7 @@ For comprehensive documentation and examples, see our **[Documentation Hub](./do
 ### 📦 **What's Included**
 - **✅ Real Implementation Examples** - Code from the actual lib-common-cqrs codebase
 - **✅ Production Monitoring** - Complete CommandMetricsService integration and actuator endpoints
-- **✅ Enterprise Security** - lib-common-auth integration + custom authorization patterns
+- **✅ Enterprise Security** - Custom authorization patterns with context-aware access control
 - **✅ Performance Optimization** - Intelligent caching strategies and reactive patterns
 - **✅ Testing Methodologies** - Unit, integration, and end-to-end testing approaches
 - **✅ Real Metrics** - Actual `firefly.cqrs.*` metrics with Prometheus integration

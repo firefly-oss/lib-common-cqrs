@@ -338,7 +338,10 @@ public class GetAccountTransactionsQuery implements Query<TransactionHistory> {
     // Custom cache key for better cache utilization
     @Override
     public String getCacheKey() {
-        return String.format("account_transactions_%s_%s_%s_%d_%s", 
+        // Note: The framework will automatically prefix this with ":cqrs:"
+        // Final key will be "firefly:cache:default::cqrs:account_transactions:..." after
+        // lib-common-cache adds its "firefly:cache:{cacheName}:" prefix
+        return String.format("account_transactions:%s:%s:%s:%d:%s",
             accountId, fromDate, toDate, limit, currency != null ? currency : "ALL");
     }
     

@@ -212,22 +212,24 @@ public class CommandHandlerRegistry {
 │   └─────────────────┘                                               │
 │             │                                                       │
 │             ▼                                                       │
-│   ┌─────────────────┐     ┌─────────────────┐                      │
-│   │ lib-common-auth │     │ Custom Auth     │                      │
-│   │ Integration     │     │ Logic           │                      │
-│   │                 │     │ (in Command)    │                      │
-│   │ - Roles         │     │ - Business      │                      │
-│   │ - Scopes        │     │   Rules         │                      │
-│   │ - Ownership     │     │ - Context-      │                      │
-│   │                 │     │   Aware         │                      │
-│   └─────────────────┘     └─────────────────┘                      │
-│             │                       │                              │
-│             └───────┬───────────────┘                              │
-│                     ▼                                              │
-│           ┌─────────────────┐                                      │
-│           │ Authorization   │                                      │
-│           │ Result          │                                      │
-│           └─────────────────┘                                      │
+│   ┌─────────────────┐                                               │
+│   │ Custom Auth     │                                               │
+│   │ Logic           │                                               │
+│   │ (in Command)    │                                               │
+│   │                 │                                               │
+│   │ - Business      │                                               │
+│   │   Rules         │                                               │
+│   │ - Context-      │                                               │
+│   │   Aware         │                                               │
+│   │ - Tenant        │                                               │
+│   │   Isolation     │                                               │
+│   └─────────────────┘                                               │
+│             │                                                       │
+│             ▼                                                       │
+│   ┌─────────────────┐                                               │
+│   │ Authorization   │                                               │
+│   │ Result          │                                               │
+│   └─────────────────┘                                               │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -237,33 +239,35 @@ public class CommandHandlerRegistry {
 ```java
 @Service
 public class AuthorizationService {
-    
-    private final LibCommonAuthIntegration libCommonAuthIntegration;
+
     private final AuthorizationProperties properties;
-    
-    public <T> Mono<AuthorizationResult> authorize(T commandOrQuery, ExecutionContext context) {
-        if (!properties.isEnabled()) {
-            return Mono.just(AuthorizationResult.success());
+
+    public <T> Mono<Void> authorizeCommand(Command<T> command) {
+        if (!properties.isEnabled() || !properties.getCustom().isEnabled()) {
+            return Mono.empty();
         }
-        
-        return performLibCommonAuthAuthorization(commandOrQuery, context)
-            .flatMap(libAuthResult -> {
-                if (!libAuthResult.isSuccess() && properties.getLibCommonAuth().isFailFast()) {
-                    return Mono.just(libAuthResult);
+
+        return command.authorize()
+            .flatMap(authorizationResult -> {
+                if (!authorizationResult.isAuthorized()) {
+                    return Mono.error(new AuthorizationException(authorizationResult));
                 }
-                
-                return performCustomAuthorization(commandOrQuery, context)
-                    .map(customResult -> mergeResults(libAuthResult, customResult));
+                return Mono.<Void>empty();
             });
     }
-    
-    private <T> Mono<AuthorizationResult> performCustomAuthorization(T commandOrQuery, ExecutionContext context) {
-        if (commandOrQuery instanceof Command) {
-            return ((Command<?>) commandOrQuery).authorize(context);
-        } else if (commandOrQuery instanceof Query) {
-            return ((Query<?>) commandOrQuery).authorize(context);
+
+    public <T> Mono<Void> authorizeCommand(Command<T> command, ExecutionContext context) {
+        if (!properties.isEnabled() || !properties.getCustom().isEnabled()) {
+            return Mono.empty();
         }
-        return Mono.just(AuthorizationResult.success());
+
+        return command.authorize(context)
+            .flatMap(authorizationResult -> {
+                if (!authorizationResult.isAuthorized()) {
+                    return Mono.error(new AuthorizationException(authorizationResult));
+                }
+                return Mono.<Void>empty();
+            });
     }
 }
 ```

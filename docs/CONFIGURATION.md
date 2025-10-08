@@ -49,9 +49,6 @@ firefly:
     # Authorization Configuration
     authorization:
       enabled: true                     # Enable authorization
-      lib-common-auth:
-        enabled: true                   # Enable lib-common-auth integration
-        fail-fast: false                # Fail fast on lib-common-auth errors
       custom:
         enabled: true                   # Enable custom authorization
         timeout-ms: 5000                # Custom authorization timeout
@@ -214,14 +211,8 @@ firefly:
   cqrs:
     authorization:
       enabled: true                     # Master authorization switch
-      
-      # lib-common-auth Integration
-      lib-common-auth:
-        enabled: true                   # Enable lib-common-auth
-        fail-fast: false                # Continue to custom auth if lib-common-auth fails
-        timeout-ms: 3000                # Authorization timeout
-      
-      # Custom Authorization  
+
+      # Custom Authorization
       custom:
         enabled: true                   # Enable custom authorization methods
         timeout-ms: 5000                # Custom authorization timeout
@@ -229,44 +220,21 @@ firefly:
 
 **Environment Variables**:
 - `FIREFLY_CQRS_AUTHORIZATION_ENABLED`
-- `FIREFLY_CQRS_AUTHORIZATION_LIB_COMMON_AUTH_ENABLED`
-- `FIREFLY_CQRS_AUTHORIZATION_LIB_COMMON_AUTH_FAIL_FAST`
 - `FIREFLY_CQRS_AUTHORIZATION_CUSTOM_ENABLED`
+- `FIREFLY_CQRS_AUTHORIZATION_CUSTOM_TIMEOUT_MS`
 
-### Authorization Integration Examples
+### Authorization Examples
 
-#### With lib-common-auth
-
-```yaml
-# Enable lib-common-auth integration
-firefly:
-  cqrs:
-    authorization:
-      lib-common-auth:
-        enabled: true
-        fail-fast: true                 # Fail immediately on lib-common-auth errors
-
-# Configure lib-common-auth (example)
-firefly:
-  auth:
-    enabled: true
-    jwt:
-      secret: your-jwt-secret
-    rbac:
-      enabled: true
-```
-
-#### Custom Authorization Only
+#### Custom Authorization
 
 ```yaml
 firefly:
   cqrs:
     authorization:
       enabled: true
-      lib-common-auth:
-        enabled: false                  # Disable lib-common-auth
       custom:
-        enabled: true                   # Use only custom authorization
+        enabled: true                   # Use custom authorization
+        timeout-ms: 5000                # 5 second timeout
 ```
 
 ## 📊 Observability Configuration
@@ -576,10 +544,8 @@ firefly:
     query:
       timeout: 60s                      # 1 minute for debugging
     authorization:
-      lib-common-auth:
-        timeout-ms: 30000               # 30 seconds
       custom:
-        timeout-ms: 30000
+        timeout-ms: 30000               # 30 seconds
 ```
 
 ### Validation Configuration

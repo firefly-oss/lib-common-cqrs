@@ -172,7 +172,10 @@ public class GetAccountBalanceQuery implements Query<AccountBalance> {
     // Override caching behavior if needed
     @Override
     public String getCacheKey() {
-        return "account_balance_" + accountId;
+        // Note: The framework will automatically prefix this with ":cqrs:"
+        // Final key will be "firefly:cache:default::cqrs:account_balance:..." after
+        // lib-common-cache adds its "firefly:cache:{cacheName}:" prefix
+        return "account_balance:" + accountId;
     }
     
     @Override
@@ -387,16 +390,13 @@ spring:
       timeout: 2000ms
 ```
 
-### Authorization Integration
+### Authorization Configuration
 
 ```yaml
 firefly:
   cqrs:
     authorization:
       enabled: true
-      lib-common-auth:
-        enabled: true
-        fail-fast: false
       custom:
         enabled: true
         timeout-ms: 5000
