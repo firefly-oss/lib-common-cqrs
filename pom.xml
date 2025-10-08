@@ -38,6 +38,13 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- Firefly Common Cache -->
+        <dependency>
+            <groupId>com.firefly</groupId>
+            <artifactId>lib-common-cache</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Spring AOP -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -74,12 +81,7 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Redis Cache Support (optional) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
-            <optional>true</optional>
-        </dependency>
+
 
         <!-- Testing -->
         <dependency>

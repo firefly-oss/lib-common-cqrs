@@ -21,7 +21,7 @@ Building scalable, maintainable applications with clear separation between **com
 - **⚡ Reactive-First**: Built on Project Reactor for high-performance async processing
 - **🛡️ Enterprise Security**: Dual authorization with lib-common-auth integration + custom logic
 - **📊 Production-Ready Observability**: Built-in metrics, health checks, and actuator endpoints
-- **🎛️ Intelligent Caching**: Automatic cache key generation with Redis/Caffeine support
+- **🎛️ Intelligent Caching**: Automatic cache key generation via lib-common-cache (Redis/Caffeine support)
 - **🔧 Auto-Configuration**: Spring Boot auto-configuration with sensible defaults
 
 ### 🏆 **What Makes It Different**
@@ -30,7 +30,7 @@ Building scalable, maintainable applications with clear separation between **com
 |---------|------------------|---------------|
 | Handler Setup | Manual registration, boilerplate | Annotation-based, automatic discovery |
 | Validation | Manual setup | Jakarta Bean Validation + custom async validation |
-| Caching | Manual cache management | Automatic cache key generation, TTL management |
+| Caching | Manual cache management | Automatic cache key generation via lib-common-cache |
 | Metrics | Custom metrics implementation | Built-in Micrometer integration with actuator endpoints |
 | Authorization | Custom authorization logic | Dual authorization: lib-common-auth + custom business logic |
 | Type Safety | Runtime type resolution errors | Compile-time generic type safety |
@@ -44,6 +44,13 @@ Building scalable, maintainable applications with clear separation between **com
 <dependency>
     <groupId>com.firefly</groupId>
     <artifactId>lib-common-cqrs</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+</dependency>
+
+<!-- Optional: Enable caching support via lib-common-cache -->
+<dependency>
+    <groupId>com.firefly</groupId>
+    <artifactId>lib-common-cache</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
 ```
@@ -168,12 +175,12 @@ public class GetAccountBalanceHandler extends QueryHandler<GetAccountBalanceQuer
                 .build());
     }
 
-    // ✅ INTELLIGENT CACHING - All managed automatically:
+    // ✅ INTELLIGENT CACHING - All managed automatically via lib-common-cache:
     // • Cache key: "account_balance_ACC123_USD" (auto-generated)
     // • TTL management with configurable expiration
     // • Cache hit/miss metrics (cache.gets with result tags)
     // • Automatic eviction when TransferMoneyCommand executes
-    // • Redis/Caffeine support with zero configuration
+    // • Redis/Caffeine support via lib-common-cache configuration
     // • Cache metrics in actuator endpoint /actuator/cqrs/queries
 }
 ```
@@ -213,11 +220,12 @@ public class GetAccountBalanceHandler extends QueryHandler<GetAccountBalanceQuer
 - **🌊 Reactive Streams**: Built on Project Reactor for non-blocking, high-throughput processing
 - **⏱️ Timeout Management**: Per-handler configurable timeouts with circuit breaker integration
 - **🔄 Intelligent Retry Logic**: Exponential backoff with jitter for failure recovery
-- **🎛️ Multi-Level Caching**: 
+- **🎛️ Multi-Level Caching via lib-common-cache**:
   - Local caching (Caffeine) for low-latency access
   - Distributed caching (Redis) for cluster-wide consistency
   - Automatic cache key generation with field-based customization
   - TTL management and automatic eviction on related commands
+  - Unified cache abstraction through FireflyCacheManager
 
 ### 🔧 **Developer Experience**
 - **🛠️ Auto-Configuration**: Spring Boot auto-configuration with production-ready defaults
@@ -492,25 +500,130 @@ FIREFLY_CQRS_AUTHORIZATION_ENABLED=true
 FIREFLY_CQRS_AUTHORIZATION_LIB_COMMON_AUTH_ENABLED=true
 ```
 
-### Redis Cache Configuration
+### Cache Configuration via lib-common-cache
+
+The CQRS library uses **lib-common-cache** for unified cache management across all Firefly libraries. This provides:
+
+- ✅ **Unified cache abstraction** - Single cache configuration for all Firefly libraries
+- ✅ **Better cache providers** - Support for Caffeine (local) and Redis (distributed)
+- ✅ **Reactive API** - Full Project Reactor integration for non-blocking cache operations
+- ✅ **Improved observability** - Better metrics and monitoring capabilities
+- ✅ **Zero code changes** - Existing query handlers work without modification
+
+#### Basic Configuration
 
 ```yaml
-# Enable Redis caching (optional)
-spring:
+# Enable caching via lib-common-cache
+firefly:
   cache:
-    type: redis
-  data:
+    enabled: true
+    default-ttl: 300s          # Default TTL for cache entries
+    provider: caffeine         # Options: caffeine (local), redis (distributed)
+
+  cqrs:
+    query:
+      cache-name: query-cache  # Name of the cache to use for queries
+      caching-enabled: true    # Enable query caching
+```
+
+#### Caffeine (Local Cache) Configuration
+
+Best for single-instance applications or when low latency is critical:
+
+```yaml
+firefly:
+  cache:
+    enabled: true
+    provider: caffeine
+    default-ttl: 300s
+
+    caffeine:
+      default:
+        maximum-size: 1000              # Max entries in cache
+        expire-after-write: PT5M        # Expire 5 minutes after write
+        expire-after-access: PT10M      # Expire 10 minutes after last access
+        initial-capacity: 100           # Initial cache capacity
+```
+
+#### Redis (Distributed Cache) Configuration
+
+Best for multi-instance applications requiring cache consistency:
+
+```yaml
+firefly:
+  cache:
+    enabled: true
+    provider: redis
+    default-ttl: 300s
+
     redis:
       host: localhost
       port: 6379
+      password: ${REDIS_PASSWORD:}     # Optional password
       timeout: 2000ms
-      
+      database: 0
+      ssl: false
+```
+
+#### Advanced Configuration
+
+```yaml
+firefly:
+  cache:
+    enabled: true
+    provider: redis
+    default-ttl: 300s
+
+    # Per-cache configuration
+    caches:
+      query-cache:                      # Specific config for query cache
+        ttl: PT15M                      # 15-minute TTL
+        maximum-size: 5000              # Larger cache for queries
+
+  cqrs:
+    query:
+      cache-name: query-cache
+      caching-enabled: true
+```
+
+#### Migration from Old Cache Configuration
+
+If you're upgrading from an older version of lib-common-cqrs:
+
+**Old Configuration (Deprecated):**
+```yaml
 firefly:
   cqrs:
     query:
-      cache-type: REDIS        # LOCAL, REDIS, CAFFEINE
-      cache-ttl: 15m
+      cache-type: REDIS        # ❌ DEPRECATED
+
+spring:
+  cache:
+    type: redis               # ❌ DEPRECATED
+  data:
+    redis:
+      host: localhost
 ```
+
+**New Configuration:**
+```yaml
+firefly:
+  cache:
+    enabled: true
+    provider: redis            # ✅ Use lib-common-cache
+    redis:
+      host: localhost
+      port: 6379
+```
+
+**Migration Steps:**
+1. Add `lib-common-cache` dependency to your `pom.xml`
+2. Remove old `firefly.cqrs.query.cache-type` property
+3. Remove `spring.cache.*` configuration
+4. Add `firefly.cache.*` configuration as shown above
+5. No code changes required - existing query handlers work automatically
+
+For detailed migration instructions, see [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md).
 
 ## 🔐 Authorization
 
@@ -929,11 +1042,11 @@ public class GetAccountBalanceHandler extends QueryHandler<GetAccountBalanceQuer
                 .build());
     }
     
-    // ✅ INTELLIGENT CACHING:
+    // ✅ INTELLIGENT CACHING via lib-common-cache:
     // - Cache key: "account_balance_ACC123456_USD"
     // - Automatic eviction when TransferMoneyCommand affects this account
     // - Cache hit/miss metrics automatically collected
-    // - Redis/Caffeine support with zero configuration
+    // - Redis/Caffeine support via lib-common-cache configuration
 }
 ```
 
