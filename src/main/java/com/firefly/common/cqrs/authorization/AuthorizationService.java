@@ -15,10 +15,6 @@
  */
 package com.firefly.common.cqrs.authorization;
 
-import com.firefly.common.cqrs.authorization.annotation.CustomAuthorization;
-import com.firefly.common.cqrs.authorization.integration.LibCommonAuthIntegration;
-import com.firefly.common.cqrs.authorization.integration.LibCommonAuthIntegrationImpl;
-import com.firefly.common.cqrs.authorization.integration.NoOpLibCommonAuthIntegration;
 import com.firefly.common.cqrs.config.AuthorizationProperties;
 import com.firefly.common.cqrs.command.Command;
 import com.firefly.common.cqrs.context.ExecutionContext;
@@ -27,7 +23,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Objects;
@@ -40,21 +35,16 @@ import java.util.Objects;
  *   <li>Resource ownership validation</li>
  *   <li>Permission-based access control</li>
  *   <li>Complex authorization rules evaluation</li>
- *   <li>Integration with external authorization services</li>
- *   <li>Integration with lib-common-auth when available</li>
- *   <li>Custom authorization overrides for complex scenarios</li>
- *   <li>Zero-trust architecture for banking applications</li>
+ *   <li>Custom authorization logic for complex scenarios</li>
  *   <li>Detailed authorization error reporting with context</li>
  *   <li>Reactive authorization pipeline with proper error handling</li>
  * </ul>
  *
  * <p>The authorization process follows this sequence:
  * <ol>
- *   <li>lib-common-auth authorization (if available and annotations present)</li>
  *   <li>Custom authorization via the command/query's authorize() method</li>
  *   <li>Context-aware authorization when ExecutionContext is available</li>
- *   <li>Authorization result combination and conflict resolution</li>
- *   <li>Aggregated authorization result with detailed error information</li>
+ *   <li>Detailed error information on authorization failure</li>
  * </ol>
  *
  * <p><strong>Key Features:</strong>
@@ -76,13 +66,13 @@ import java.util.Objects;
  *         return accountService.verifyAccountOwnership(sourceAccountId, userId)
  *             .flatMap(ownsSource -> {
  *                 if (!ownsSource) {
- *                     return Mono.just(AuthorizationResult.failure("sourceAccount", 
+ *                     return Mono.just(AuthorizationResult.failure("sourceAccount",
  *                         "Source account does not belong to user"));
  *                 }
  *                 return accountService.verifyAccountOwnership(targetAccountId, userId);
  *             })
- *             .map(ownsTarget -> ownsTarget ? 
- *                 AuthorizationResult.success() : 
+ *             .map(ownsTarget -> ownsTarget ?
+ *                 AuthorizationResult.success() :
  *                 AuthorizationResult.failure("targetAccount", "Target account does not belong to user"));
  *     }
  * }
@@ -99,37 +89,13 @@ import java.util.Objects;
 @Service
 public class AuthorizationService {
 
-    private final LibCommonAuthIntegration libCommonAuthIntegration;
     private final AuthorizationProperties properties;
     private final Optional<AuthorizationMetrics> authorizationMetrics;
 
     public AuthorizationService(AuthorizationProperties properties, Optional<AuthorizationMetrics> authorizationMetrics) {
         this.properties = properties;
         this.authorizationMetrics = authorizationMetrics;
-        this.libCommonAuthIntegration = createLibCommonAuthIntegration();
-    }
-
-    /**
-     * Creates the lib-common-auth integration if available and enabled, otherwise returns a no-op implementation.
-     */
-    private LibCommonAuthIntegration createLibCommonAuthIntegration() {
-        // Check if lib-common-auth integration is disabled in configuration
-        if (!properties.getLibCommonAuth().isEnabled()) {
-            log.info("lib-common-auth integration disabled by configuration - using standalone authorization");
-            return new NoOpLibCommonAuthIntegration();
-        }
-
-        try {
-            // Try to load lib-common-auth classes
-            Class.forName("com.firefly.common.auth.model.AuthInfo");
-            Class.forName("com.firefly.common.auth.service.AccessValidator");
-
-            log.info("lib-common-auth detected and enabled - enabling integrated authorization");
-            return new LibCommonAuthIntegrationImpl();
-        } catch (ClassNotFoundException e) {
-            log.info("lib-common-auth not available - using standalone authorization");
-            return new NoOpLibCommonAuthIntegration();
-        }
+        log.info("Authorization service initialized - using standalone custom authorization");
     }
 
     /**
@@ -153,14 +119,9 @@ public class AuthorizationService {
     }
 
     /**
-     * Authorizes a command using integrated authorization logic.
+     * Authorizes a command using custom authorization logic.
      *
-     * <p>This method performs authorization by:
-     * <ol>
-     *   <li>First checking lib-common-auth annotations and rules (if available)</li>
-     *   <li>Then applying custom authorization logic from the command</li>
-     *   <li>Combining results with proper conflict resolution</li>
-     * </ol>
+     * <p>This method performs authorization by applying custom authorization logic from the command.
      *
      * <p>If authorization fails, an {@link AuthorizationException} is thrown
      * with detailed information about the authorization failures.
@@ -168,8 +129,7 @@ public class AuthorizationService {
      * <p><strong>Authorization Context:</strong>
      * The authorization process includes:
      * <ul>
-     *   <li>lib-common-auth integration (roles, scopes, ownership)</li>
-     *   <li>Custom authorization overrides</li>
+     *   <li>Custom authorization logic</li>
      *   <li>Command type and ID for tracing</li>
      *   <li>Timestamp for audit logging</li>
      *   <li>Detailed error reporting on failure</li>
@@ -193,38 +153,17 @@ public class AuthorizationService {
         Instant startTime = Instant.now();
 
         if (properties.getLogging().isEnabled()) {
-            log.debug("Starting integrated command authorization: {} [{}]", commandType, commandId);
+            log.debug("Starting command authorization: {} [{}]", commandType, commandId);
         }
 
-        // First try lib-common-auth integration if available
-        return libCommonAuthIntegration.authorizeCommand(command)
-            .flatMap(libAuthResult -> {
-                if (libAuthResult.isAuthorized()) {
-                    // lib-common-auth authorized, but still check custom authorization
-                    return command.authorize()
-                        .map(customResult -> combineAuthorizationResults(libAuthResult, customResult, "lib-common-auth + custom"));
-                } else {
-                    // lib-common-auth denied, check if custom authorization can override
-                    return command.authorize()
-                        .map(customResult -> {
-                            if (customResult.isAuthorized()) {
-                                log.debug("Custom authorization overrode lib-common-auth denial for command: {} [{}]",
-                                        commandType, commandId);
-                                return customResult;
-                            } else {
-                                // Both failed, combine errors
-                                return combineAuthorizationResults(libAuthResult, customResult, "lib-common-auth + custom");
-                            }
-                        });
-                }
-            })
-            .flatMap(finalResult -> {
-                if (!finalResult.isAuthorized()) {
+        return command.authorize()
+            .flatMap(authorizationResult -> {
+                if (!authorizationResult.isAuthorized()) {
                     log.warn("Command authorization failed: {} [{}] - Violations: {}",
-                        commandType, commandId, finalResult.getSummary());
+                        commandType, commandId, authorizationResult.getSummary());
 
                     AuthorizationResult enrichedResult = enrichAuthorizationResult(
-                        finalResult, command, "Integrated Command Authorization"
+                        authorizationResult, command, "Command Authorization"
                     );
 
                     return Mono.error(new AuthorizationException(enrichedResult));
@@ -246,14 +185,10 @@ public class AuthorizationService {
     }
 
     /**
-     * Authorizes a command with execution context using integrated authorization logic.
+     * Authorizes a command with execution context using custom authorization logic.
      *
-     * <p>This method performs context-aware authorization by:
-     * <ol>
-     *   <li>First checking lib-common-auth annotations and rules with context</li>
-     *   <li>Then applying custom authorization logic from the command with context</li>
-     *   <li>Combining results with proper conflict resolution</li>
-     * </ol>
+     * <p>This method performs context-aware authorization by applying custom authorization
+     * logic from the command with context.
      *
      * @param command the command to authorize
      * @param context the execution context with user, tenant, and feature information
@@ -275,39 +210,18 @@ public class AuthorizationService {
         Instant startTime = Instant.now();
 
         if (properties.getLogging().isEnabled()) {
-            log.debug("Starting integrated command authorization with context: {} [{}] - User: {}, Tenant: {}",
+            log.debug("Starting command authorization with context: {} [{}] - User: {}, Tenant: {}",
                 commandType, commandId, context.getUserId(), context.getTenantId());
         }
 
-        // First try lib-common-auth integration with context
-        return libCommonAuthIntegration.authorizeCommand(command, context)
-            .flatMap(libAuthResult -> {
-                if (libAuthResult.isAuthorized()) {
-                    // lib-common-auth authorized, but still check custom authorization
-                    return command.authorize(context)
-                        .map(customResult -> combineAuthorizationResults(libAuthResult, customResult, "lib-common-auth + custom (with context)"));
-                } else {
-                    // lib-common-auth denied, check if custom authorization can override
-                    return command.authorize(context)
-                        .map(customResult -> {
-                            if (customResult.isAuthorized()) {
-                                log.debug("Custom authorization overrode lib-common-auth denial for command with context: {} [{}]",
-                                        commandType, commandId);
-                                return customResult;
-                            } else {
-                                // Both failed, combine errors
-                                return combineAuthorizationResults(libAuthResult, customResult, "lib-common-auth + custom (with context)");
-                            }
-                        });
-                }
-            })
-            .flatMap(finalResult -> {
-                if (!finalResult.isAuthorized()) {
+        return command.authorize(context)
+            .flatMap(authorizationResult -> {
+                if (!authorizationResult.isAuthorized()) {
                     log.warn("Command authorization with context failed: {} [{}] - Violations: {}",
-                        commandType, commandId, finalResult.getSummary());
+                        commandType, commandId, authorizationResult.getSummary());
 
                     AuthorizationResult enrichedResult = enrichAuthorizationResultWithContext(
-                        finalResult, command, context, "Integrated Command Authorization with Context"
+                        authorizationResult, command, context, "Command Authorization with Context"
                     );
 
                     return Mono.error(new AuthorizationException(enrichedResult));
@@ -422,41 +336,6 @@ public class AuthorizationService {
                 log.debug("Query authorization with context completed successfully: {} [{}] in {}ms", 
                     queryType, queryId, durationMs);
             });
-    }
-
-    /**
-     * Combines authorization results from lib-common-auth and custom authorization.
-     *
-     * @param libAuthResult result from lib-common-auth
-     * @param customResult result from custom authorization
-     * @param phase description of the authorization phase
-     * @return combined authorization result
-     */
-    private AuthorizationResult combineAuthorizationResults(AuthorizationResult libAuthResult,
-                                                           AuthorizationResult customResult,
-                                                           String phase) {
-        // If both are authorized, return success
-        if (libAuthResult.isAuthorized() && customResult.isAuthorized()) {
-            log.debug("Both lib-common-auth and custom authorization passed for {}", phase);
-            return AuthorizationResult.success();
-        }
-
-        // If either is authorized, we need to decide based on zero-trust policy
-        // For banking applications, we typically require both to pass
-        if (libAuthResult.isAuthorized() && !customResult.isAuthorized()) {
-            log.warn("lib-common-auth passed but custom authorization failed for {}", phase);
-            return customResult; // Return the failure
-        }
-
-        if (!libAuthResult.isAuthorized() && customResult.isAuthorized()) {
-            log.warn("Custom authorization passed but lib-common-auth failed for {}", phase);
-            // In zero-trust, custom can override lib-common-auth for complex scenarios
-            return customResult; // Allow custom override
-        }
-
-        // Both failed, combine errors
-        log.warn("Both lib-common-auth and custom authorization failed for {}", phase);
-        return libAuthResult.combine(customResult);
     }
 
     /**

@@ -22,17 +22,16 @@ import java.lang.annotation.Target;
 
 /**
  * Annotation to mark commands/queries that use custom authorization logic.
- * 
- * This annotation provides metadata about how the custom authorization
- * should interact with lib-common-auth when both are present.
- * 
+ *
+ * This annotation provides metadata about the custom authorization behavior
+ * and is used for documentation and debugging purposes.
+ *
  * Usage examples:
- * 
+ *
  * <pre>{@code
  * @CustomAuthorization(
  *     description = "Validates complex business rules for money transfers",
- *     overrideLibCommonAuth = true,
- *     requiresBothToPass = false
+ *     priority = 10
  * )
  * public class TransferMoneyCommand implements Command<TransferResult> {
  *     // Custom authorization logic in authorize() method
@@ -50,43 +49,11 @@ public @interface CustomAuthorization {
     String description() default "";
 
     /**
-     * Whether custom authorization can override lib-common-auth denials.
-     * 
-     * When true: Custom authorization success can override lib-common-auth failure
-     * When false: Both lib-common-auth and custom must pass for authorization to succeed
-     * 
-     * Default is true to support complex banking scenarios where custom logic
-     * may need to override standard role/scope checks.
-     */
-    boolean overrideLibCommonAuth() default true;
-
-    /**
-     * Whether both lib-common-auth and custom authorization must pass.
-     * 
-     * When true: Both systems must authorize for success (AND logic)
-     * When false: Either system can authorize for success (OR logic)
-     * 
-     * This is only relevant when overrideLibCommonAuth is false.
-     */
-    boolean requiresBothToPass() default false;
-
-    /**
      * Priority level for this authorization check.
      * Higher numbers indicate higher priority.
-     * 
+     *
      * Used when multiple authorization annotations are present
      * to determine the order of evaluation.
      */
     int priority() default 0;
-
-    /**
-     * Whether to skip lib-common-auth checks entirely for this command/query.
-     * 
-     * When true: Only custom authorization is performed
-     * When false: Both lib-common-auth and custom authorization are performed
-     * 
-     * Use this for commands/queries that have completely custom authorization
-     * requirements that don't align with standard role/scope models.
-     */
-    boolean skipLibCommonAuth() default false;
 }

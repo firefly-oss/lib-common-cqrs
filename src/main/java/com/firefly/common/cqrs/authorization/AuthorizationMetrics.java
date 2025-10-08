@@ -28,20 +28,19 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Metrics collection for authorization operations.
- * 
+ *
  * <p>This class provides comprehensive metrics for monitoring authorization
  * performance, success rates, and failure patterns in production environments.
- * 
+ *
  * <p>Metrics collected include:
  * <ul>
  *   <li>Authorization attempt counts (success/failure)</li>
  *   <li>Authorization timing metrics</li>
- *   <li>lib-common-auth integration metrics</li>
  *   <li>Custom authorization metrics</li>
  *   <li>Cache hit/miss rates</li>
  *   <li>Error categorization</li>
  * </ul>
- * 
+ *
  * @since 1.0.0
  */
 @Slf4j
@@ -50,80 +49,65 @@ import java.util.concurrent.atomic.AtomicLong;
 public class AuthorizationMetrics {
 
     private final MeterRegistry meterRegistry;
-    
+
     // Counters
     private final Counter authorizationAttempts;
     private final Counter authorizationSuccesses;
     private final Counter authorizationFailures;
-    private final Counter libCommonAuthSuccesses;
-    private final Counter libCommonAuthFailures;
     private final Counter customAuthSuccesses;
     private final Counter customAuthFailures;
     private final Counter cacheHits;
     private final Counter cacheMisses;
-    
+
     // Timers
     private final Timer authorizationTimer;
-    private final Timer libCommonAuthTimer;
     private final Timer customAuthTimer;
-    
+
     // Gauges
     private final AtomicLong activeAuthorizationRequests = new AtomicLong(0);
     private final AtomicLong cacheSize = new AtomicLong(0);
 
     public AuthorizationMetrics(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
-        
+
         // Initialize counters
         this.authorizationAttempts = Counter.builder("firefly.authorization.attempts")
             .description("Total number of authorization attempts")
             .register(meterRegistry);
-            
+
         this.authorizationSuccesses = Counter.builder("firefly.authorization.successes")
             .description("Number of successful authorizations")
             .register(meterRegistry);
-            
+
         this.authorizationFailures = Counter.builder("firefly.authorization.failures")
             .description("Number of failed authorizations")
             .register(meterRegistry);
-            
-        this.libCommonAuthSuccesses = Counter.builder("firefly.authorization.lib_common_auth.successes")
-            .description("Number of successful lib-common-auth authorizations")
-            .register(meterRegistry);
-            
-        this.libCommonAuthFailures = Counter.builder("firefly.authorization.lib_common_auth.failures")
-            .description("Number of failed lib-common-auth authorizations")
-            .register(meterRegistry);
-            
+
         this.customAuthSuccesses = Counter.builder("firefly.authorization.custom.successes")
             .description("Number of successful custom authorizations")
             .register(meterRegistry);
-            
+
         this.customAuthFailures = Counter.builder("firefly.authorization.custom.failures")
             .description("Number of failed custom authorizations")
             .register(meterRegistry);
-            
+
         this.cacheHits = Counter.builder("firefly.authorization.cache.hits")
             .description("Number of authorization cache hits")
             .register(meterRegistry);
-            
+
         this.cacheMisses = Counter.builder("firefly.authorization.cache.misses")
             .description("Number of authorization cache misses")
             .register(meterRegistry);
-        
+
         // Initialize timers
         this.authorizationTimer = Timer.builder("firefly.authorization.duration")
             .description("Time taken for authorization operations")
             .register(meterRegistry);
-            
-        this.libCommonAuthTimer = Timer.builder("firefly.authorization.lib_common_auth.duration")
-            .description("Time taken for lib-common-auth operations")
-            .register(meterRegistry);
-            
+
         this.customAuthTimer = Timer.builder("firefly.authorization.custom.duration")
             .description("Time taken for custom authorization operations")
             .register(meterRegistry);
-        
+
         // Initialize gauges
         meterRegistry.gauge("firefly.authorization.active_requests", activeAuthorizationRequests);
         meterRegistry.gauge("firefly.authorization.cache.size", cacheSize);
@@ -144,39 +128,27 @@ public class AuthorizationMetrics {
 
     /**
      * Records a successful authorization.
-     * 
+     *
      * @param commandType the type of command that was authorized
      * @param duration the time taken for authorization
-     * @param authType the type of authorization (lib-common-auth, custom, both)
+     * @param authType the type of authorization (custom)
      */
     public void recordAuthorizationSuccess(String commandType, Duration duration, String authType) {
         authorizationSuccesses.increment();
         authorizationTimer.record(duration);
         activeAuthorizationRequests.decrementAndGet();
-        
-        // Record specific auth type metrics
-        switch (authType.toLowerCase()) {
-            case "lib-common-auth":
-                libCommonAuthSuccesses.increment();
-                libCommonAuthTimer.record(duration);
-                break;
-            case "custom":
-                customAuthSuccesses.increment();
-                customAuthTimer.record(duration);
-                break;
-            case "both":
-                libCommonAuthSuccesses.increment();
-                customAuthSuccesses.increment();
-                break;
-        }
-        
-        log.debug("Authorization success recorded - Command: {}, Duration: {}ms, Type: {}", 
+
+        // Record custom auth metrics
+        customAuthSuccesses.increment();
+        customAuthTimer.record(duration);
+
+        log.debug("Authorization success recorded - Command: {}, Duration: {}ms, Type: {}",
             commandType, duration.toMillis(), authType);
     }
 
     /**
      * Records a failed authorization.
-     * 
+     *
      * @param commandType the type of command that failed authorization
      * @param duration the time taken before failure
      * @param authType the type of authorization that failed
@@ -186,22 +158,11 @@ public class AuthorizationMetrics {
         authorizationFailures.increment();
         authorizationTimer.record(duration);
         activeAuthorizationRequests.decrementAndGet();
-        
-        // Record specific auth type metrics
-        switch (authType.toLowerCase()) {
-            case "lib-common-auth":
-                libCommonAuthFailures.increment();
-                libCommonAuthTimer.record(duration);
-                break;
-            case "custom":
-                customAuthFailures.increment();
-                customAuthTimer.record(duration);
-                break;
-            case "both":
-                // Could be either or both that failed
-                break;
-        }
-        
+
+        // Record custom auth metrics
+        customAuthFailures.increment();
+        customAuthTimer.record(duration);
+
         // Record failure reason as a tag
         Counter.builder("firefly.authorization.failures.by_reason")
             .tag("reason", sanitizeReason(reason))
@@ -209,8 +170,8 @@ public class AuthorizationMetrics {
             .tag("auth_type", authType)
             .register(meterRegistry)
             .increment();
-        
-        log.debug("Authorization failure recorded - Command: {}, Duration: {}ms, Type: {}, Reason: {}", 
+
+        log.debug("Authorization failure recorded - Command: {}, Duration: {}ms, Type: {}, Reason: {}",
             commandType, duration.toMillis(), authType, reason);
     }
 
@@ -258,17 +219,8 @@ public class AuthorizationMetrics {
     }
 
     /**
-     * Records lib-common-auth specific timing.
-     * 
-     * @param duration the time taken for lib-common-auth operation
-     */
-    public void recordLibCommonAuthTiming(Duration duration) {
-        libCommonAuthTimer.record(duration);
-    }
-
-    /**
      * Records custom authorization specific timing.
-     * 
+     *
      * @param duration the time taken for custom authorization operation
      */
     public void recordCustomAuthTiming(Duration duration) {
