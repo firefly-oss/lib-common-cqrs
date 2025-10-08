@@ -17,14 +17,13 @@
 package com.firefly.common.cqrs.query;
 
 import com.firefly.common.cqrs.authorization.AuthorizationService;
+import com.firefly.common.cqrs.cache.QueryCacheAdapter;
 import com.firefly.common.cqrs.context.ExecutionContext;
 import com.firefly.common.cqrs.tracing.CorrelationContext;
 import com.firefly.common.cqrs.validation.AutoValidationProcessor;
 import com.firefly.common.cqrs.validation.ValidationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
@@ -43,7 +42,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class DefaultQueryBus implements QueryBus {
 
-    private static final String DEFAULT_CACHE_NAME = "query-cache";
     private static final Duration DEFAULT_CACHE_TTL = Duration.ofMinutes(15);
 
     private final Map<Class<? extends Query<?>>, QueryHandler<?, ?>> handlers = new ConcurrentHashMap<>();
@@ -51,7 +49,7 @@ public class DefaultQueryBus implements QueryBus {
     private final CorrelationContext correlationContext;
     private final AutoValidationProcessor autoValidationProcessor;
     private final AuthorizationService authorizationService;
-    private final CacheManager cacheManager;
+    private final QueryCacheAdapter cacheAdapter;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     // Metrics
@@ -63,13 +61,13 @@ public class DefaultQueryBus implements QueryBus {
                           CorrelationContext correlationContext,
                           AutoValidationProcessor autoValidationProcessor,
                           AuthorizationService authorizationService,
-                          @Autowired(required = false) CacheManager cacheManager,
+                          @Autowired(required = false) QueryCacheAdapter cacheAdapter,
                           @Autowired(required = false) io.micrometer.core.instrument.MeterRegistry meterRegistry) {
         this.applicationContext = applicationContext;
         this.correlationContext = correlationContext;
         this.autoValidationProcessor = autoValidationProcessor;
         this.authorizationService = authorizationService;
-        this.cacheManager = cacheManager;
+        this.cacheAdapter = cacheAdapter;
         this.meterRegistry = meterRegistry;
 
         if (meterRegistry != null) {
@@ -77,7 +75,8 @@ public class DefaultQueryBus implements QueryBus {
         }
 
         discoverHandlers();
-        log.info("DefaultQueryBus initialized");
+        log.info("DefaultQueryBus initialized with cache adapter: {}",
+                cacheAdapter != null ? cacheAdapter.getCacheName() : "none");
     }
 
     @EventListener(ContextRefreshedEvent.class)
@@ -192,13 +191,13 @@ public class DefaultQueryBus implements QueryBus {
                             })
                             .then(Mono.defer(() -> {
                                 // Check cache if enabled
-                                if (query.isCacheable() && handler.supportsCaching()) {
+                                if (cacheAdapter != null && query.isCacheable() && handler.supportsCaching()) {
                                     String cacheKey = query.getCacheKey();
                                     if (cacheKey != null) {
                                         log.debug("CQRS Query Cache Check - Type: {}, ID: {}, CacheKey: {}",
                                                 query.getClass().getSimpleName(), query.getQueryId(), cacheKey);
                                         return getCachedResult(cacheKey, query.getResultType())
-                                                .switchIfEmpty(executeAndCache(handler, query, cacheKey));
+                                                .switchIfEmpty(Mono.defer(() -> executeAndCache(handler, query, cacheKey)));
                                     }
                                 }
 
@@ -273,41 +272,41 @@ public class DefaultQueryBus implements QueryBus {
                             })
                             .then(Mono.defer(() -> {
                                 // Check if caching is enabled and query is cacheable
-                                if (cacheManager != null && query.isCacheable() && query.getCacheKey() != null) {
-                                    Cache cache = cacheManager.getCache(DEFAULT_CACHE_NAME);
-                                    if (cache != null) {
-                                        String cacheKey = query.getCacheKey();
-                                        Cache.ValueWrapper cachedValue = cache.get(cacheKey);
+                                if (cacheAdapter != null && query.isCacheable() && query.getCacheKey() != null) {
+                                    String cacheKey = query.getCacheKey();
 
-                                        if (cachedValue != null) {
-                                            log.debug("CQRS Query Cache Hit - Type: {}, ID: {}, CacheKey: {}",
-                                                    query.getClass().getSimpleName(), query.getQueryId(), cacheKey);
-                                            return Mono.just((R) cachedValue.get())
-                                                    .doOnSuccess(result -> log.info("CQRS Query Processing Completed from Cache - Type: {}, ID: {}, Result: {}",
-                                                            query.getClass().getSimpleName(), query.getQueryId(),
-                                                            result != null ? "Success" : "Null"))
-                                                    .doFinally(signalType -> correlationContext.clear());
-                                        }
-
-                                        // Cache miss - execute handler and cache result
-                                        log.debug("CQRS Query Cache Miss - Type: {}, ID: {}, CacheKey: {}",
-                                                query.getClass().getSimpleName(), query.getQueryId(), cacheKey);
-                                        return executeWithMetrics(handler, query, context)
-                                                .doOnSuccess(result -> {
-                                                    if (result != null) {
-                                                        cache.put(cacheKey, result);
-                                                        log.debug("CQRS Query Result Cached - Type: {}, ID: {}, CacheKey: {}",
-                                                                query.getClass().getSimpleName(), query.getQueryId(), cacheKey);
-                                                    }
-                                                    log.info("CQRS Query Processing Completed with Context - Type: {}, ID: {}, Result: {}",
+                                    return cacheAdapter.get(cacheKey, query.getResultType())
+                                            .doOnNext(cachedResult -> log.debug("CQRS Query Cache Hit - Type: {}, ID: {}, CacheKey: {}",
+                                                    query.getClass().getSimpleName(), query.getQueryId(), cacheKey))
+                                            .doOnSuccess(result -> {
+                                                if (result != null) {
+                                                    log.info("CQRS Query Processing Completed from Cache - Type: {}, ID: {}, Result: {}",
                                                             query.getClass().getSimpleName(), query.getQueryId(),
                                                             result != null ? "Success" : "Null");
-                                                })
-                                                .doOnError(error -> log.error("CQRS Query Processing Failed with Context - Type: {}, ID: {}, Error: {}, Cause: {}",
-                                                        query.getClass().getSimpleName(), query.getQueryId(),
-                                                        error.getClass().getSimpleName(), error.getMessage(), error))
-                                                .doFinally(signalType -> correlationContext.clear());
-                                    }
+                                                }
+                                            })
+                                            .switchIfEmpty(Mono.defer(() -> {
+                                                // Cache miss - execute handler and cache result
+                                                log.debug("CQRS Query Cache Miss - Type: {}, ID: {}, CacheKey: {}",
+                                                        query.getClass().getSimpleName(), query.getQueryId(), cacheKey);
+                                                return executeWithMetrics(handler, query, context)
+                                                        .flatMap(result -> {
+                                                            if (result != null) {
+                                                                return cacheAdapter.put(cacheKey, result)
+                                                                        .thenReturn(result)
+                                                                        .doOnSuccess(r -> log.debug("CQRS Query Result Cached - Type: {}, ID: {}, CacheKey: {}",
+                                                                                query.getClass().getSimpleName(), query.getQueryId(), cacheKey));
+                                                            }
+                                                            return Mono.just(result);
+                                                        })
+                                                        .doOnSuccess(result -> log.info("CQRS Query Processing Completed with Context - Type: {}, ID: {}, Result: {}",
+                                                                query.getClass().getSimpleName(), query.getQueryId(),
+                                                                result != null ? "Success" : "Null"))
+                                                        .doOnError(error -> log.error("CQRS Query Processing Failed with Context - Type: {}, ID: {}, Error: {}, Cause: {}",
+                                                                query.getClass().getSimpleName(), query.getQueryId(),
+                                                                error.getClass().getSimpleName(), error.getMessage(), error));
+                                            }))
+                                            .doFinally(signalType -> correlationContext.clear());
                                 }
 
                                 // Execute without caching
@@ -366,24 +365,21 @@ public class DefaultQueryBus implements QueryBus {
 
     @Override
     public Mono<Void> clearCache(String cacheKey) {
-        return Mono.fromRunnable(() -> {
-            Cache cache = cacheManager.getCache(DEFAULT_CACHE_NAME);
-            if (cache != null) {
-                cache.evict(cacheKey);
-                log.debug("Cleared cache for key: {}", cacheKey);
-            }
-        });
+        if (cacheAdapter != null) {
+            return cacheAdapter.evict(cacheKey)
+                    .then()
+                    .doOnSuccess(v -> log.debug("Cleared cache for key: {}", cacheKey));
+        }
+        return Mono.empty();
     }
 
     @Override
     public Mono<Void> clearAllCache() {
-        return Mono.fromRunnable(() -> {
-            Cache cache = cacheManager.getCache(DEFAULT_CACHE_NAME);
-            if (cache != null) {
-                cache.clear();
-                log.debug("Cleared all query cache");
-            }
-        });
+        if (cacheAdapter != null) {
+            return cacheAdapter.clear()
+                    .doOnSuccess(v -> log.debug("Cleared all query cache"));
+        }
+        return Mono.empty();
     }
 
     /**
@@ -404,40 +400,31 @@ public class DefaultQueryBus implements QueryBus {
         log.info("Discovered and registered {} query handlers", handlers.size());
     }
 
-    @SuppressWarnings("unchecked")
     private <R> Mono<R> getCachedResult(String cacheKey, Class<R> resultType) {
-        return Mono.fromCallable(() -> {
-            Cache cache = cacheManager.getCache(DEFAULT_CACHE_NAME);
-            if (cache != null) {
-                Cache.ValueWrapper wrapper = cache.get(cacheKey);
-                if (wrapper != null && wrapper.get() != null) {
-                    log.info("CQRS Query Cache Hit - CacheKey: {}, ResultType: {}",
-                            cacheKey, wrapper.get().getClass().getSimpleName());
-                    return (R) wrapper.get();
-                } else {
-                    log.debug("CQRS Query Cache Miss - CacheKey: {}", cacheKey);
-                }
-            }
-            return null;
-        });
+        if (cacheAdapter == null) {
+            return Mono.empty();
+        }
+
+        return cacheAdapter.get(cacheKey, resultType)
+                .doOnNext(result -> log.info("CQRS Query Cache Hit - CacheKey: {}, ResultType: {}",
+                        cacheKey, result.getClass().getSimpleName()));
     }
 
     private <R> Mono<R> executeAndCache(QueryHandler<Query<R>, R> handler, Query<R> query, String cacheKey) {
         return executeWithMetrics(handler, query)
-                .doOnSuccess(result -> {
-                    if (result != null) {
-                        Cache cache = cacheManager.getCache(DEFAULT_CACHE_NAME);
-                        if (cache != null) {
-                            cache.put(cacheKey, result);
-                            log.info("CQRS Query Result Cached - Type: {}, ID: {}, CacheKey: {}, ResultType: {}",
-                                    query.getClass().getSimpleName(), query.getQueryId(), cacheKey,
-                                    result.getClass().getSimpleName());
-                        }
+                .flatMap(result -> {
+                    if (result != null && cacheAdapter != null) {
+                        return cacheAdapter.put(cacheKey, result)
+                                .thenReturn(result)
+                                .doOnSuccess(r -> log.info("CQRS Query Result Cached - Type: {}, ID: {}, CacheKey: {}, ResultType: {}",
+                                        query.getClass().getSimpleName(), query.getQueryId(), cacheKey,
+                                        r.getClass().getSimpleName()));
                     }
-                    log.info("CQRS Query Processing Completed (Cached) - Type: {}, ID: {}, Result: {}",
-                            query.getClass().getSimpleName(), query.getQueryId(),
-                            result != null ? "Success" : "Null");
+                    return Mono.just(result);
                 })
+                .doOnSuccess(result -> log.info("CQRS Query Processing Completed (Cached) - Type: {}, ID: {}, Result: {}",
+                        query.getClass().getSimpleName(), query.getQueryId(),
+                        result != null ? "Success" : "Null"))
                 .doOnError(error -> log.error("CQRS Query Processing Failed (Cached) - Type: {}, ID: {}, Error: {}, Cause: {}",
                         query.getClass().getSimpleName(), query.getQueryId(),
                         error.getClass().getSimpleName(), error.getMessage(), error))
