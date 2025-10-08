@@ -141,10 +141,9 @@ public class CqrsAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(FireflyCacheManager.class)
-    public QueryCacheAdapter queryCacheAdapter(FireflyCacheManager cacheManager, CqrsProperties cqrsProperties) {
-        String cacheName = cqrsProperties.getQuery().getCacheName();
-        log.info("Configuring CQRS Query Cache Adapter with cache name: {}", cacheName);
-        return new QueryCacheAdapter(cacheManager, cacheName);
+    public QueryCacheAdapter queryCacheAdapter(FireflyCacheManager cacheManager) {
+        log.info("Configuring CQRS Query Cache Adapter with FireflyCacheManager");
+        return new QueryCacheAdapter(cacheManager);
     }
 
     @Bean

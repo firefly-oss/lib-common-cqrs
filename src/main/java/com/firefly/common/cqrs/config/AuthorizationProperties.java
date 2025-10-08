@@ -22,11 +22,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * Configuration properties for the CQRS Authorization system.
- * 
+ *
  * <p>This class provides comprehensive configuration options for the authorization
- * system, allowing fine-grained control over authorization behavior, integration
- * with lib-common-auth, and performance tuning.
- * 
+ * system, allowing fine-grained control over authorization behavior and performance tuning.
+ *
  * <p>Configuration can be provided through:
  * <ul>
  *   <li>application.yml/application.properties</li>
@@ -34,24 +33,21 @@ import org.springframework.stereotype.Component;
  *   <li>System properties</li>
  *   <li>Spring profiles</li>
  * </ul>
- * 
+ *
  * <p>Example configuration:
  * <pre>{@code
  * firefly:
  *   cqrs:
  *     authorization:
  *       enabled: true
- *       lib-common-auth:
- *         enabled: true
- *         fail-fast: false
  *       custom:
  *         enabled: true
- *         allow-override: true
+ *         timeout-ms: 5000
  *       logging:
  *         enabled: true
  *         log-successful: false
  * }</pre>
- * 
+ *
  * @since 1.0.0
  */
 @Data
@@ -62,17 +58,12 @@ public class AuthorizationProperties {
     /**
      * Whether the authorization system is enabled globally.
      * When disabled, all authorization checks are skipped.
-     * 
+     *
      * <p>Environment variable: {@code FIREFLY_CQRS_AUTHORIZATION_ENABLED}
-     * 
+     *
      * @since 1.0.0
      */
     private boolean enabled = true;
-
-    /**
-     * Configuration for lib-common-auth integration.
-     */
-    private LibCommonAuth libCommonAuth = new LibCommonAuth();
 
     /**
      * Configuration for custom authorization logic.
@@ -90,74 +81,25 @@ public class AuthorizationProperties {
     private Performance performance = new Performance();
 
     /**
-     * Configuration for lib-common-auth integration.
-     */
-    @Data
-    public static class LibCommonAuth {
-        
-        /**
-         * Whether lib-common-auth integration is enabled.
-         * When disabled, only custom authorization logic is used.
-         * 
-         * <p>Environment variable: {@code FIREFLY_CQRS_AUTHORIZATION_LIB_COMMON_AUTH_ENABLED}
-         * 
-         * @since 1.0.0
-         */
-        private boolean enabled = true;
-
-        /**
-         * Whether to fail fast when lib-common-auth authorization fails.
-         * When true, custom authorization is not executed if lib-common-auth fails.
-         * When false, custom authorization can override lib-common-auth failures.
-         * 
-         * <p>Environment variable: {@code FIREFLY_CQRS_AUTHORIZATION_LIB_COMMON_AUTH_FAIL_FAST}
-         * 
-         * @since 1.0.0
-         */
-        private boolean failFast = false;
-
-        /**
-         * Whether to require both lib-common-auth and custom authorization to pass by default.
-         * This can be overridden per command/query using @CustomAuthorization annotation.
-         * 
-         * <p>Environment variable: {@code FIREFLY_CQRS_AUTHORIZATION_LIB_COMMON_AUTH_REQUIRE_BOTH}
-         * 
-         * @since 1.0.0
-         */
-        private boolean requireBoth = false;
-    }
-
-    /**
      * Configuration for custom authorization logic.
      */
     @Data
     public static class Custom {
-        
+
         /**
          * Whether custom authorization logic is enabled.
-         * When disabled, only lib-common-auth authorization is used.
-         * 
+         *
          * <p>Environment variable: {@code FIREFLY_CQRS_AUTHORIZATION_CUSTOM_ENABLED}
-         * 
+         *
          * @since 1.0.0
          */
         private boolean enabled = true;
 
         /**
-         * Whether custom authorization can override lib-common-auth decisions by default.
-         * This can be overridden per command/query using @CustomAuthorization annotation.
-         * 
-         * <p>Environment variable: {@code FIREFLY_CQRS_AUTHORIZATION_CUSTOM_ALLOW_OVERRIDE}
-         * 
-         * @since 1.0.0
-         */
-        private boolean allowOverride = true;
-
-        /**
          * Default timeout for custom authorization logic in milliseconds.
-         * 
+         *
          * <p>Environment variable: {@code FIREFLY_CQRS_AUTHORIZATION_CUSTOM_TIMEOUT_MS}
-         * 
+         *
          * @since 1.0.0
          */
         private long timeoutMs = 5000;
@@ -252,7 +194,7 @@ public class AuthorizationProperties {
 
     /**
      * Checks if authorization is completely disabled.
-     * 
+     *
      * @return true if authorization should be skipped entirely
      * @since 1.0.0
      */
@@ -261,42 +203,12 @@ public class AuthorizationProperties {
     }
 
     /**
-     * Checks if both lib-common-auth and custom authorization are disabled.
-     * 
+     * Checks if authorization is completely disabled.
+     *
      * @return true if no authorization mechanisms are enabled
      * @since 1.0.0
      */
     public boolean isCompletelyDisabled() {
-        return !enabled || (!libCommonAuth.enabled && !custom.enabled);
-    }
-
-    /**
-     * Checks if only lib-common-auth is enabled (no custom authorization).
-     * 
-     * @return true if only lib-common-auth authorization is active
-     * @since 1.0.0
-     */
-    public boolean isLibCommonAuthOnly() {
-        return enabled && libCommonAuth.enabled && !custom.enabled;
-    }
-
-    /**
-     * Checks if only custom authorization is enabled (no lib-common-auth).
-     * 
-     * @return true if only custom authorization is active
-     * @since 1.0.0
-     */
-    public boolean isCustomOnly() {
-        return enabled && !libCommonAuth.enabled && custom.enabled;
-    }
-
-    /**
-     * Checks if both authorization mechanisms are enabled.
-     * 
-     * @return true if both lib-common-auth and custom authorization are active
-     * @since 1.0.0
-     */
-    public boolean isBothEnabled() {
-        return enabled && libCommonAuth.enabled && custom.enabled;
+        return !enabled || !custom.enabled;
     }
 }
