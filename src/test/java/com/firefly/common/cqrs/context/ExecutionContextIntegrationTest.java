@@ -12,7 +12,6 @@ import com.firefly.common.cqrs.validation.AutoValidationProcessor;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.ApplicationContext;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -38,16 +37,15 @@ class ExecutionContextIntegrationTest {
         ApplicationContext applicationContext = mock(ApplicationContext.class);
         CorrelationContext correlationContext = new CorrelationContext();
         AutoValidationProcessor validationProcessor = new AutoValidationProcessor(null);
-        ConcurrentMapCacheManager cacheManager = new ConcurrentMapCacheManager();
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        
+
         // Set up command bus (simplified for testing)
         commandBus = mock(DefaultCommandBus.class);
-        
-        // Set up query bus
+
+        // Set up query bus (without cache adapter for this test)
         queryBus = new DefaultQueryBus(applicationContext, correlationContext, validationProcessor,
                                       new com.firefly.common.cqrs.authorization.AuthorizationService(TestAuthorizationProperties.createDefault(), Optional.empty()),
-                                      cacheManager, meterRegistry);
+                                      null, meterRegistry);
         
         // Register handlers manually for testing - use a simple QueryHandler instead of ContextAwareQueryHandler
         // to avoid generic type resolution issues in tests

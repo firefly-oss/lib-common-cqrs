@@ -5,8 +5,6 @@ import com.firefly.common.cqrs.tracing.CorrelationContext;
 import com.firefly.common.cqrs.validation.AutoValidationProcessor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.cache.CacheManager;
-import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.ApplicationContext;
 import reactor.test.StepVerifier;
 
@@ -29,19 +27,18 @@ import static org.mockito.Mockito.mock;
 class QueryBusTest {
 
     private QueryBus queryBus;
-    private CacheManager cacheManager;
 
     @BeforeEach
     void setUp() {
         ApplicationContext applicationContext = mock(ApplicationContext.class);
         CorrelationContext correlationContext = new CorrelationContext();
         AutoValidationProcessor validationProcessor = new AutoValidationProcessor(null);
-        cacheManager = new ConcurrentMapCacheManager();
-        
+
+        // Create query bus without cache adapter for this test
         queryBus = new DefaultQueryBus(applicationContext, correlationContext, validationProcessor,
                                       new com.firefly.common.cqrs.authorization.AuthorizationService(TestAuthorizationProperties.createDefault(), Optional.empty()),
-                                      cacheManager, null);
-        
+                                      null, null);
+
         // Register handlers manually for testing - using the external classes with @QueryHandlerComponent
         ((DefaultQueryBus) queryBus).registerHandler(new GetAccountBalanceHandler());
         ((DefaultQueryBus) queryBus).registerHandler(new GetTransactionHistoryHandler());

@@ -12,8 +12,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.cache.CacheManager;
-import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.ApplicationContext;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -52,8 +50,7 @@ class CqrsFrameworkIntegrationTest {
         CorrelationContext correlationContext = new CorrelationContext();
         AutoValidationProcessor validationProcessor = new AutoValidationProcessor(null);
         meterRegistry = new SimpleMeterRegistry();
-        CacheManager cacheManager = new ConcurrentMapCacheManager();
-        
+
         // Create the new separated services
         CommandHandlerRegistry handlerRegistry = new CommandHandlerRegistry(applicationContext);
         CommandValidationService validationService = new CommandValidationService(validationProcessor);
@@ -62,10 +59,11 @@ class CqrsFrameworkIntegrationTest {
         commandBus = new DefaultCommandBus(handlerRegistry, validationService,
                                            new com.firefly.common.cqrs.authorization.AuthorizationService(TestAuthorizationProperties.createDefault(), Optional.empty()),
                                            metricsService, correlationContext);
+        // Note: QueryBus is created without cache adapter for this test (cache adapter is optional)
         queryBus = new DefaultQueryBus(applicationContext, correlationContext, validationProcessor,
                                       new com.firefly.common.cqrs.authorization.AuthorizationService(TestAuthorizationProperties.createDefault(), Optional.empty()),
-                                      cacheManager, meterRegistry);
-        
+                                      null, meterRegistry);
+
         // Register handlers manually with explicit type specification
         ((DefaultCommandBus) commandBus).registerHandler(new TestCreateAccountHandler());
         ((DefaultQueryBus) queryBus).registerHandler(new TestGetBalanceHandler());

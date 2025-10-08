@@ -22,6 +22,7 @@ import com.firefly.common.cache.manager.FireflyCacheManager;
 import com.firefly.common.cache.config.CacheAutoConfiguration;
 import com.firefly.common.cqrs.cache.QueryCacheAdapter;
 import com.firefly.common.cqrs.config.CqrsAutoConfiguration;
+import com.firefly.common.cqrs.config.CqrsProperties;
 import com.firefly.common.cqrs.query.Query;
 import com.firefly.common.cqrs.query.QueryHandler;
 import com.firefly.common.cqrs.query.DefaultQueryBus;
@@ -42,7 +43,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integration test that verifies lib-common-cqrs works correctly with lib-common-cache using real Caffeine cache.
- * This test uses the actual CacheAutoConfiguration from lib-common-cache to ensure end-to-end functionality.
+ * This test uses the actual CacheAutoConfiguration from lib-common-cache and CqrsAutoConfiguration to ensure
+ * end-to-end functionality with real Caffeine caching.
  */
 @SpringBootTest(classes = {
     CacheAutoConfiguration.class,
@@ -61,23 +63,23 @@ class CqrsCacheIntegrationTest {
 
     @Autowired
     private DefaultQueryBus queryBus;
-    
+
     @Autowired
     private FireflyCacheManager cacheManager;
-    
-    @Autowired
-    private QueryCacheAdapter queryCacheAdapter;
-    
+
     @Autowired
     private TestAccountQueryHandler handler;
 
+    private CacheAdapter cache;
+
     @BeforeEach
     void setUp() {
+        // Get cache adapter directly
+        cache = cacheManager.getCache("default");
+        assertThat(cache).isNotNull();
+
         // Clear cache before each test
-        CacheAdapter cache = cacheManager.getCache("default");
-        if (cache != null) {
-            cache.clear().block();
-        }
+        cache.clear().block();
         handler.resetInvocationCount();
     }
     
@@ -87,7 +89,7 @@ class CqrsCacheIntegrationTest {
         public TestAccountQueryHandler testAccountQueryHandler() {
             return new TestAccountQueryHandler();
         }
-        
+
         @Bean
         public TestNonCacheableQueryHandler testNonCacheableQueryHandler(TestAccountQueryHandler accountHandler) {
             return new TestNonCacheableQueryHandler(accountHandler);
@@ -164,8 +166,9 @@ class CqrsCacheIntegrationTest {
         queryBus.query(query).block();
         assertThat(handler.getInvocationCount()).isEqualTo(1);
 
-        // When - Evict cache
-        StepVerifier.create(queryCacheAdapter.evict(query.getCacheKey()))
+        // When - Evict cache using CacheAdapter directly
+        StepVerifier.create(cache.evict(query.getCacheKey()))
+            .expectNext(true)
             .verifyComplete();
 
         // When - Execute query again after eviction
@@ -186,8 +189,8 @@ class CqrsCacheIntegrationTest {
         queryBus.query(query2).block();
         assertThat(handler.getInvocationCount()).isEqualTo(2);
 
-        // When - Clear all cache
-        StepVerifier.create(queryCacheAdapter.clear())
+        // When - Clear all cache using CacheAdapter directly
+        StepVerifier.create(cache.clear())
             .verifyComplete();
 
         // When - Execute queries again after clearing
@@ -326,6 +329,7 @@ class CqrsCacheIntegrationTest {
         }
     }
 
+    @com.firefly.common.cqrs.annotations.QueryHandlerComponent(cacheable = true)
     static class TestAccountQueryHandler extends QueryHandler<TestAccountQuery, TestAccountResult> {
         private final AtomicInteger invocationCount = new AtomicInteger(0);
 
