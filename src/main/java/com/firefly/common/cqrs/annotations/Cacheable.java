@@ -104,12 +104,23 @@ public @interface Cacheable {
     String unless() default "";
 
     /**
-     * Cache name to use.
-     * If not specified, uses the default query cache.
-     * 
+     * Cache name to use (deprecated - no longer used).
+     * The CQRS library now uses FireflyCacheManager directly.
+     * Cache keys are automatically prefixed with ":cqrs:" for namespace isolation.
+     * Combined with lib-common-cache's "firefly:cache:{cacheName}:" prefix, final keys are:
+     * <ul>
+     *   <li>Caffeine: "firefly:cache:default::cqrs:QueryName"</li>
+     *   <li>Redis: "firefly:cache:default::cqrs:QueryName"</li>
+     * </ul>
+     *
+     * <p>The double colon (::) provides clear visual separation between the cache infrastructure
+     * prefix and the application-level CQRS namespace.
+     *
      * @return cache name
+     * @deprecated No longer used. FireflyCacheManager is used directly.
      */
-    String cacheName() default "query-cache";
+    @Deprecated
+    String cacheName() default "";
 
     /**
      * Whether to cache null results.

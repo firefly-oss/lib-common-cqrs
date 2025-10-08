@@ -56,8 +56,7 @@ import static org.assertj.core.api.Assertions.assertThat;
     "firefly.cache.default-cache-type=CAFFEINE",
     "firefly.cache.caffeine.default.maximum-size=100",
     "firefly.cache.caffeine.default.expire-after-write=PT5M",
-    "firefly.cache.caffeine.default.record-stats=true",
-    "firefly.cqrs.query.cache-name=default"
+    "firefly.cache.caffeine.default.record-stats=true"
 })
 class CqrsCacheIntegrationTest {
 
@@ -70,16 +69,10 @@ class CqrsCacheIntegrationTest {
     @Autowired
     private TestAccountQueryHandler handler;
 
-    private CacheAdapter cache;
-
     @BeforeEach
     void setUp() {
-        // Get cache adapter directly
-        cache = cacheManager.getCache("default");
-        assertThat(cache).isNotNull();
-
         // Clear cache before each test
-        cache.clear().block();
+        cacheManager.clear().block();
         handler.resetInvocationCount();
     }
     
@@ -101,12 +94,8 @@ class CqrsCacheIntegrationTest {
         // Verify we're using the real lib-common-cache implementation with Caffeine
         assertThat(cacheManager).isNotNull();
         assertThat(cacheManager).isInstanceOf(FireflyCacheManager.class);
-        
-        CacheAdapter cache = cacheManager.getCache("default");
-        assertThat(cache).isNotNull();
-        assertThat(cache.getCacheName()).isEqualTo("default");
-        assertThat(cache.getCacheType()).isEqualTo(CacheType.CAFFEINE);
-        assertThat(cache.isAvailable()).isTrue();
+        assertThat(cacheManager.getCacheType()).isEqualTo(CacheType.CAFFEINE);
+        assertThat(cacheManager.isAvailable()).isTrue();
     }
 
     @Test
@@ -166,8 +155,9 @@ class CqrsCacheIntegrationTest {
         queryBus.query(query).block();
         assertThat(handler.getInvocationCount()).isEqualTo(1);
 
-        // When - Evict cache using CacheAdapter directly
-        StepVerifier.create(cache.evict(query.getCacheKey()))
+        // When - Evict cache using FireflyCacheManager directly
+        String prefixedKey = ":cqrs:" + query.getCacheKey();
+        StepVerifier.create(cacheManager.evict(prefixedKey))
             .expectNext(true)
             .verifyComplete();
 
@@ -189,8 +179,8 @@ class CqrsCacheIntegrationTest {
         queryBus.query(query2).block();
         assertThat(handler.getInvocationCount()).isEqualTo(2);
 
-        // When - Clear all cache using CacheAdapter directly
-        StepVerifier.create(cache.clear())
+        // When - Clear all cache using FireflyCacheManager directly
+        StepVerifier.create(cacheManager.clear())
             .verifyComplete();
 
         // When - Execute queries again after clearing
@@ -220,14 +210,13 @@ class CqrsCacheIntegrationTest {
         // Given
         String key = "test-key";
         String value = "test-value";
-        CacheAdapter cache = cacheManager.getCache("default");
 
-        // When - Put value directly in Caffeine cache
-        StepVerifier.create(cache.put(key, value))
+        // When - Put value directly in Caffeine cache using FireflyCacheManager
+        StepVerifier.create(cacheManager.put(key, value))
             .verifyComplete();
 
         // Then - Get value from Caffeine cache
-        StepVerifier.create(cache.<String, String>get(key, String.class))
+        StepVerifier.create(cacheManager.<String, String>get(key, String.class))
             .assertNext(result -> {
                 assertThat(result).isPresent();
                 assertThat(result.get()).isEqualTo(value);
@@ -235,12 +224,12 @@ class CqrsCacheIntegrationTest {
             .verifyComplete();
 
         // When - Evict value
-        StepVerifier.create(cache.evict(key))
+        StepVerifier.create(cacheManager.evict(key))
             .expectNext(true)
             .verifyComplete();
 
         // Then - Verify evicted from Caffeine
-        StepVerifier.create(cache.<String, String>get(key, String.class))
+        StepVerifier.create(cacheManager.<String, String>get(key, String.class))
             .assertNext(result -> assertThat(result).isEmpty())
             .verifyComplete();
     }
@@ -249,14 +238,13 @@ class CqrsCacheIntegrationTest {
     void shouldVerifyCaffeineStatistics() {
         // Given
         TestAccountQuery query = new TestAccountQuery("ACC-STATS");
-        CacheAdapter cache = cacheManager.getCache("default");
 
         // When - Execute query twice (first miss, second hit)
         queryBus.query(query).block();
         queryBus.query(query).block();
 
         // Then - Verify Caffeine statistics are available
-        StepVerifier.create(cache.getStats())
+        StepVerifier.create(cacheManager.getStats())
             .assertNext(stats -> {
                 assertThat(stats).isNotNull();
                 assertThat(stats.getCacheName()).isEqualTo("default");

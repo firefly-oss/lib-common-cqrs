@@ -29,15 +29,17 @@ import java.lang.annotation.*;
  * <pre>{@code
  * @CommandHandler
  * @CacheEvict(
- *     cacheNames = {"query-cache"},
- *     keyPatterns = {"GetAccountBalance:accountNumber={command.accountNumber}:*"},
+ *     keyPatterns = {"GetAccountBalance::accountNumber={command.accountNumber}::*"},
  *     tags = {"account-data"}
  * )
  * public class UpdateAccountBalanceHandler extends BaseCommandHandler<UpdateAccountBalanceCommand, AccountResult> {
- *     
+ *
  *     @Override
  *     protected Mono<AccountResult> doHandle(UpdateAccountBalanceCommand command) {
  *         // After processing, all account balance queries for this account will be evicted
+ *         // Note: Cache keys are automatically prefixed with ":cqrs:" by the framework
+ *         // Final keys will be "firefly:cache:default::cqrs:GetAccountBalance:..." after
+ *         // lib-common-cache adds its "firefly:cache:{cacheName}:" prefix
  *         return updateAccountBalance(command);
  *     }
  * }
@@ -47,7 +49,6 @@ import java.lang.annotation.*;
  * <pre>{@code
  * @CommandHandler
  * @CacheEvict(
- *     cacheNames = {"query-cache", "summary-cache"},
  *     condition = "command.amount.compareTo(new java.math.BigDecimal('1000')) > 0",
  *     keyPatterns = {
  *         "GetAccountBalance:accountNumber={command.fromAccount}:*",
@@ -58,6 +59,8 @@ import java.lang.annotation.*;
  * )
  * public class TransferMoneyHandler extends BaseCommandHandler<TransferMoneyCommand, TransferResult> {
  *     // Conditional cache eviction for large transfers only
+ *     // Cache keys are automatically prefixed with ":cqrs:" by the framework
+ *     // The double colon (::) provides clear separation between cache infrastructure and CQRS namespace
  * }
  * }</pre>
  *

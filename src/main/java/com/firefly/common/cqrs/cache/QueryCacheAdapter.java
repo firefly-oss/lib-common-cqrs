@@ -27,7 +27,18 @@ import java.util.Optional;
 /**
  * Adapter that bridges the Firefly Common Cache library with CQRS query caching.
  * This adapter wraps the FireflyCacheManager and provides reactive cache operations
- * for query results.
+ * for query results with automatic namespace prefixing.
+ *
+ * <p>All cache keys are automatically prefixed with ":cqrs:" which, combined with
+ * the lib-common-cache's "firefly:cache:{cacheName}:" prefix, results in keys like:
+ * <ul>
+ *   <li>Caffeine: "firefly:cache:default::cqrs:QueryName"</li>
+ *   <li>Redis: "firefly:cache:default::cqrs:QueryName"</li>
+ * </ul>
+ *
+ * <p>The double colon (::) between the cache name and the CQRS namespace is intentional
+ * and provides clear visual separation between the cache infrastructure prefix and the
+ * application-level namespace.
  *
  * @author Firefly Software Solutions Inc
  * @since 1.0.0
@@ -35,49 +46,32 @@ import java.util.Optional;
 @Slf4j
 public class QueryCacheAdapter {
 
-    private static final String DEFAULT_CACHE_NAME = "query-cache";
+    private static final String CACHE_KEY_PREFIX = ":cqrs:";
 
-    private final FireflyCacheManager cacheManager;
-    private final String cacheName;
+    private final CacheAdapter cache;
 
     /**
-     * Creates a new QueryCacheAdapter with the default cache name.
+     * Creates a new QueryCacheAdapter.
      *
-     * @param cacheManager the Firefly cache manager
+     * @param cacheManager the Firefly cache manager (which implements CacheAdapter)
      */
     public QueryCacheAdapter(FireflyCacheManager cacheManager) {
-        this(cacheManager, DEFAULT_CACHE_NAME);
-    }
-
-    /**
-     * Creates a new QueryCacheAdapter with a specific cache name.
-     *
-     * @param cacheManager the Firefly cache manager
-     * @param cacheName the name of the cache to use
-     */
-    public QueryCacheAdapter(FireflyCacheManager cacheManager, String cacheName) {
-        this.cacheManager = cacheManager;
-        this.cacheName = cacheName;
-        log.info("QueryCacheAdapter initialized with cache: {}", cacheName);
+        this.cache = cacheManager;
+        log.info("QueryCacheAdapter initialized with FireflyCacheManager");
     }
 
     /**
      * Retrieves a cached query result.
      *
-     * @param cacheKey the cache key
+     * @param cacheKey the cache key (without prefix)
      * @param resultType the expected result type
      * @param <R> the result type
      * @return a Mono containing the cached result if present, or empty if not found
      */
     @SuppressWarnings("unchecked")
     public <R> Mono<R> get(String cacheKey, Class<R> resultType) {
-        CacheAdapter cache = cacheManager.getCache(cacheName);
-        if (cache == null) {
-            log.warn("Cache '{}' not found", cacheName);
-            return Mono.empty();
-        }
-
-        return cache.<String, R>get(cacheKey, resultType)
+        String prefixedKey = addPrefix(cacheKey);
+        return cache.<String, R>get(prefixedKey, resultType)
             .flatMap(optionalValue -> {
                 if (optionalValue.isPresent()) {
                     R value = optionalValue.get();
@@ -94,7 +88,7 @@ public class QueryCacheAdapter {
     /**
      * Stores a query result in the cache.
      *
-     * @param cacheKey the cache key
+     * @param cacheKey the cache key (without prefix)
      * @param result the result to cache
      * @param <R> the result type
      * @return a Mono that completes when the result is cached
@@ -104,13 +98,8 @@ public class QueryCacheAdapter {
             return Mono.empty();
         }
 
-        CacheAdapter cache = cacheManager.getCache(cacheName);
-        if (cache == null) {
-            log.warn("Cache '{}' not found", cacheName);
-            return Mono.empty();
-        }
-
-        return cache.put(cacheKey, result)
+        String prefixedKey = addPrefix(cacheKey);
+        return cache.put(prefixedKey, result)
             .doOnSuccess(v -> log.debug("CQRS Query Result Cached - CacheKey: {}, ResultType: {}",
                     cacheKey, result.getClass().getSimpleName()));
     }
@@ -118,7 +107,7 @@ public class QueryCacheAdapter {
     /**
      * Stores a query result in the cache with a specific TTL.
      *
-     * @param cacheKey the cache key
+     * @param cacheKey the cache key (without prefix)
      * @param result the result to cache
      * @param ttl the time-to-live for the cached entry
      * @param <R> the result type
@@ -129,13 +118,8 @@ public class QueryCacheAdapter {
             return Mono.empty();
         }
 
-        CacheAdapter cache = cacheManager.getCache(cacheName);
-        if (cache == null) {
-            log.warn("Cache '{}' not found", cacheName);
-            return Mono.empty();
-        }
-
-        return cache.put(cacheKey, result, ttl)
+        String prefixedKey = addPrefix(cacheKey);
+        return cache.put(prefixedKey, result, ttl)
             .doOnSuccess(v -> log.debug("CQRS Query Result Cached with TTL - CacheKey: {}, ResultType: {}, TTL: {}",
                     cacheKey, result.getClass().getSimpleName(), ttl));
     }
@@ -143,52 +127,55 @@ public class QueryCacheAdapter {
     /**
      * Evicts a cached query result.
      *
-     * @param cacheKey the cache key to evict
+     * @param cacheKey the cache key to evict (without prefix)
      * @return a Mono that emits true if the cache entry was evicted, false otherwise
      */
     public Mono<Boolean> evict(String cacheKey) {
-        CacheAdapter cache = cacheManager.getCache(cacheName);
-        if (cache == null) {
-            log.warn("Cache '{}' not found", cacheName);
-            return Mono.just(false);
-        }
-
-        return cache.evict(cacheKey)
+        String prefixedKey = addPrefix(cacheKey);
+        return cache.evict(prefixedKey)
             .doOnSuccess(evicted -> log.debug("CQRS Query Cache Evicted - CacheKey: {}, Success: {}", cacheKey, evicted));
     }
 
     /**
      * Clears all cached query results.
+     * Note: This clears the entire cache, not just CQRS entries.
      *
      * @return a Mono that completes when the cache is cleared
      */
     public Mono<Void> clear() {
-        CacheAdapter cache = cacheManager.getCache(cacheName);
-        if (cache == null) {
-            log.warn("Cache '{}' not found", cacheName);
-            return Mono.empty();
-        }
-
         return cache.clear()
-            .doOnSuccess(v -> log.debug("CQRS Query Cache Cleared - Cache: {}", cacheName));
+            .doOnSuccess(v -> log.debug("CQRS Query Cache Cleared"));
     }
 
     /**
-     * Gets the name of the cache being used.
+     * Gets the underlying cache adapter.
      *
-     * @return the cache name
+     * @return the cache adapter
      */
-    public String getCacheName() {
-        return cacheName;
+    public CacheAdapter getCache() {
+        return cache;
     }
 
     /**
-     * Gets the underlying Firefly cache manager.
+     * Adds the CQRS namespace prefix to a cache key.
+     * The final key will be "firefly:cache:default::cqrs:{cacheKey}" after lib-common-cache
+     * adds its "firefly:cache:{cacheName}:" prefix.
      *
-     * @return the cache manager
+     * <p>The double colon (::) provides clear visual separation between the cache infrastructure
+     * prefix and the application-level CQRS namespace.
+     *
+     * @param cacheKey the cache key without prefix
+     * @return the cache key with :cqrs: prefix
      */
-    public FireflyCacheManager getCacheManager() {
-        return cacheManager;
+    private String addPrefix(String cacheKey) {
+        if (cacheKey == null) {
+            return CACHE_KEY_PREFIX;
+        }
+        // Don't add prefix if it's already there
+        if (cacheKey.startsWith(CACHE_KEY_PREFIX)) {
+            return cacheKey;
+        }
+        return CACHE_KEY_PREFIX + cacheKey;
     }
 }
 

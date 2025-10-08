@@ -45,23 +45,20 @@ class QueryCacheAdapterTest {
     @Mock
     private FireflyCacheManager cacheManager;
 
-    @Mock
-    private CacheAdapter cache;
-
     private QueryCacheAdapter queryCacheAdapter;
 
     @BeforeEach
     void setUp() {
-        when(cacheManager.getCache("query-cache")).thenReturn(cache);
-        queryCacheAdapter = new QueryCacheAdapter(cacheManager, "query-cache");
+        queryCacheAdapter = new QueryCacheAdapter(cacheManager);
     }
 
     @Test
     void shouldGetCachedValue() {
         // Given
         String cacheKey = "test-key";
+        String prefixedKey = ":cqrs:test-key";
         TestResult expectedResult = new TestResult("123", new BigDecimal("100.00"));
-        when(cache.get(cacheKey, TestResult.class)).thenReturn(Mono.just(Optional.of(expectedResult)));
+        when(cacheManager.get(prefixedKey, TestResult.class)).thenReturn(Mono.just(Optional.of(expectedResult)));
 
         // When & Then
         StepVerifier.create(queryCacheAdapter.get(cacheKey, TestResult.class))
@@ -72,21 +69,22 @@ class QueryCacheAdapterTest {
             })
             .verifyComplete();
 
-        verify(cache).get(cacheKey, TestResult.class);
+        verify(cacheManager).get(prefixedKey, TestResult.class);
     }
 
     @Test
     void shouldReturnEmptyWhenCacheMiss() {
         // Given
         String cacheKey = "missing-key";
-        when(cache.get(cacheKey, TestResult.class)).thenReturn(Mono.just(Optional.empty()));
+        String prefixedKey = ":cqrs:missing-key";
+        when(cacheManager.get(prefixedKey, TestResult.class)).thenReturn(Mono.just(Optional.empty()));
 
         // When & Then
         StepVerifier.create(queryCacheAdapter.get(cacheKey, TestResult.class))
             .expectNextCount(0)
             .verifyComplete();
 
-        verify(cache).get(cacheKey, TestResult.class);
+        verify(cacheManager).get(prefixedKey, TestResult.class);
     }
 
     @Test
@@ -95,98 +93,103 @@ class QueryCacheAdapterTest {
         // The CacheAdapter.get(key, type) method already ensures type safety
         // We'll test that empty cache returns empty result
         String cacheKey = "empty-key";
-        when(cache.get(cacheKey, TestResult.class)).thenReturn(Mono.just(Optional.empty()));
+        String prefixedKey = ":cqrs:empty-key";
+        when(cacheManager.get(prefixedKey, TestResult.class)).thenReturn(Mono.just(Optional.empty()));
 
         // When & Then
         StepVerifier.create(queryCacheAdapter.get(cacheKey, TestResult.class))
             .expectNextCount(0)
             .verifyComplete();
 
-        verify(cache).get(cacheKey, TestResult.class);
+        verify(cacheManager).get(prefixedKey, TestResult.class);
     }
 
     @Test
     void shouldPutValueInCache() {
         // Given
         String cacheKey = "test-key";
+        String prefixedKey = ":cqrs:test-key";
         TestResult result = new TestResult("456", new BigDecimal("200.00"));
-        when(cache.put(cacheKey, result)).thenReturn(Mono.empty());
+        when(cacheManager.put(prefixedKey, result)).thenReturn(Mono.empty());
 
         // When & Then
         StepVerifier.create(queryCacheAdapter.put(cacheKey, result))
             .verifyComplete();
 
-        verify(cache).put(cacheKey, result);
+        verify(cacheManager).put(prefixedKey, result);
     }
 
     @Test
     void shouldPutValueInCacheWithTTL() {
         // Given
         String cacheKey = "test-key";
+        String prefixedKey = ":cqrs:test-key";
         TestResult result = new TestResult("789", new BigDecimal("300.00"));
         Duration ttl = Duration.ofMinutes(5);
-        when(cache.put(eq(cacheKey), eq(result), any(Duration.class))).thenReturn(Mono.empty());
+        when(cacheManager.put(eq(prefixedKey), eq(result), any(Duration.class))).thenReturn(Mono.empty());
 
         // When & Then
         StepVerifier.create(queryCacheAdapter.put(cacheKey, result, ttl))
             .verifyComplete();
 
-        verify(cache).put(eq(cacheKey), eq(result), eq(ttl));
+        verify(cacheManager).put(eq(prefixedKey), eq(result), eq(ttl));
     }
 
     @Test
     void shouldEvictCacheEntry() {
         // Given
         String cacheKey = "test-key";
-        when(cache.evict(cacheKey)).thenReturn(Mono.just(true));
+        String prefixedKey = ":cqrs:test-key";
+        when(cacheManager.evict(prefixedKey)).thenReturn(Mono.just(true));
 
         // When & Then
         StepVerifier.create(queryCacheAdapter.evict(cacheKey))
             .expectNext(true)
             .verifyComplete();
 
-        verify(cache).evict(cacheKey);
+        verify(cacheManager).evict(prefixedKey);
     }
 
     @Test
     void shouldClearAllCacheEntries() {
         // Given
-        when(cache.clear()).thenReturn(Mono.empty());
+        when(cacheManager.clear()).thenReturn(Mono.empty());
 
         // When & Then
         StepVerifier.create(queryCacheAdapter.clear())
             .verifyComplete();
 
-        verify(cache).clear();
+        verify(cacheManager).clear();
     }
 
     @Test
     void shouldHandleNullCacheKey() {
         // Given
-        when(cache.get(null, TestResult.class)).thenReturn(Mono.just(Optional.empty()));
+        String prefixedKey = ":cqrs:";
+        when(cacheManager.get(prefixedKey, TestResult.class)).thenReturn(Mono.just(Optional.empty()));
 
-        // When & Then - null cache key returns empty result
+        // When & Then - null cache key returns empty result (with prefix only)
         StepVerifier.create(queryCacheAdapter.get(null, TestResult.class))
             .expectNextCount(0)
             .verifyComplete();
     }
 
     @Test
-    void shouldUseDefaultCacheName() {
+    void shouldUseFireflyCacheManager() {
         // Given
-        when(cacheManager.getCache("query-cache")).thenReturn(cache);
         QueryCacheAdapter adapter = new QueryCacheAdapter(cacheManager);
 
         // When
         String cacheKey = "test-key";
-        when(cache.get(cacheKey, TestResult.class)).thenReturn(Mono.just(Optional.empty()));
+        String prefixedKey = ":cqrs:test-key";
+        when(cacheManager.get(prefixedKey, TestResult.class)).thenReturn(Mono.just(Optional.empty()));
 
         // Then
         StepVerifier.create(adapter.get(cacheKey, TestResult.class))
             .expectNextCount(0)
             .verifyComplete();
 
-        verify(cacheManager).getCache("query-cache");
+        verify(cacheManager).get(prefixedKey, TestResult.class);
     }
 
     /**
