@@ -93,20 +93,30 @@ public interface Query<R> {
     /**
      * Cache key for this query if caching is enabled.
      * Default implementation uses query class name and metadata hash.
-     * @return cache key, or null to disable caching for this instance
+     * The cache key will be automatically prefixed with ":cqrs:" by the QueryCacheAdapter.
+     * Combined with lib-common-cache's "firefly:cache:{cacheName}:" prefix, final keys are:
+     * <ul>
+     *   <li>Caffeine: "firefly:cache:default::cqrs:QueryName"</li>
+     *   <li>Redis: "firefly:cache:default::cqrs:QueryName"</li>
+     * </ul>
+     *
+     * <p>The double colon (::) between the cache name and the CQRS namespace provides
+     * clear visual separation between the cache infrastructure prefix and the application-level namespace.
+     *
+     * @return cache key (without prefix), or null to disable caching for this instance
      */
     default String getCacheKey() {
         if (!isCacheable()) {
             return null;
         }
-        
+
         String baseKey = this.getClass().getSimpleName();
         Map<String, Object> metadata = getMetadata();
-        
+
         if (metadata != null && !metadata.isEmpty()) {
-            return baseKey + "_" + metadata.hashCode();
+            return baseKey + ":" + metadata.hashCode();
         }
-        
+
         return baseKey;
     }
 

@@ -76,7 +76,7 @@ public class DefaultQueryBus implements QueryBus {
 
         discoverHandlers();
         log.info("DefaultQueryBus initialized with cache adapter: {}",
-                cacheAdapter != null ? cacheAdapter.getCacheName() : "none");
+                cacheAdapter != null ? "enabled" : "none");
     }
 
     @EventListener(ContextRefreshedEvent.class)
