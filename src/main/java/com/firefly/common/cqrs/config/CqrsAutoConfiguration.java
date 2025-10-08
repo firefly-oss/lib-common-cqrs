@@ -16,6 +16,8 @@
 
 package com.firefly.common.cqrs.config;
 
+import com.firefly.common.cache.manager.FireflyCacheManager;
+import com.firefly.common.cqrs.cache.QueryCacheAdapter;
 import com.firefly.common.cqrs.command.CommandBus;
 import com.firefly.common.cqrs.command.CommandHandlerRegistry;
 import com.firefly.common.cqrs.command.CommandMetricsService;
@@ -23,9 +25,6 @@ import com.firefly.common.cqrs.command.CommandValidationService;
 import com.firefly.common.cqrs.command.DefaultCommandBus;
 import com.firefly.common.cqrs.query.DefaultQueryBus;
 import com.firefly.common.cqrs.query.QueryBus;
-import com.firefly.common.cqrs.config.AuthorizationProperties;
-import com.firefly.common.cqrs.config.CacheConfigurationValidator;
-import com.firefly.common.cqrs.config.RedisCacheAutoConfiguration;
 import com.firefly.common.cqrs.tracing.CorrelationContext;
 import com.firefly.common.cqrs.validation.AutoValidationProcessor;
 import jakarta.validation.Validator;
@@ -33,23 +32,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.cache.CacheManager;
-import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 
 /**
  * Auto-configuration for CQRS framework components.
  * Provides automatic setup of CommandBus, QueryBus, and related infrastructure.
+ * Integrates with lib-common-cache for query result caching.
  */
 @Slf4j
 @AutoConfiguration
-@AutoConfigureAfter(RedisCacheAutoConfiguration.class)
 @EnableConfigurationProperties(CqrsProperties.class)
 @ConditionalOnProperty(prefix = "firefly.cqrs", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class CqrsAutoConfiguration {
@@ -143,42 +140,34 @@ public class CqrsAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    @ConditionalOnBean(FireflyCacheManager.class)
+    public QueryCacheAdapter queryCacheAdapter(FireflyCacheManager cacheManager, CqrsProperties cqrsProperties) {
+        String cacheName = cqrsProperties.getQuery().getCacheName();
+        log.info("Configuring CQRS Query Cache Adapter with cache name: {}", cacheName);
+        return new QueryCacheAdapter(cacheManager, cacheName);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public QueryBus queryBus(ApplicationContext applicationContext,
                            CorrelationContext correlationContext,
                            AutoValidationProcessor autoValidationProcessor,
                            @Autowired(required = false) com.firefly.common.cqrs.authorization.AuthorizationService authorizationService,
-                           @Qualifier("cqrsCacheManager") CacheManager cacheManager,
+                           @Autowired(required = false) QueryCacheAdapter cacheAdapter,
                            io.micrometer.core.instrument.MeterRegistry meterRegistry) {
         if (authorizationService != null) {
             log.info("Configuring CQRS Query Bus with authorization enabled (auto-configured)");
         } else {
             log.info("Configuring CQRS Query Bus with authorization disabled (auto-configured)");
         }
-        return new DefaultQueryBus(applicationContext, correlationContext, autoValidationProcessor, authorizationService, cacheManager, meterRegistry);
-    }
 
-    @Bean("cqrsCacheManager")
-    @ConditionalOnMissingBean(name = "cqrsCacheManager")
-    public CacheManager cqrsCacheManager(CqrsProperties cqrsProperties) {
-        CqrsProperties.Cache.CacheType cacheType = cqrsProperties.getQuery().getCache().getType();
-
-        if (cacheType == CqrsProperties.Cache.CacheType.REDIS &&
-            cqrsProperties.getQuery().getCache().getRedis().isEnabled()) {
-            log.warn("Redis cache is configured but Redis auto-configuration did not activate. " +
-                    "Falling back to local cache. Check Redis dependencies and configuration.");
+        if (cacheAdapter != null) {
+            log.info("CQRS Query Bus configured with cache support via lib-common-cache");
+        } else {
+            log.info("CQRS Query Bus configured without cache support (lib-common-cache not available)");
         }
 
-        log.info("Configuring default local cache manager for CQRS queries (cqrsCacheManager)");
-        log.info("Note: If lib-common-web is also present, the idempotency cache manager will be used as primary for global @Cacheable support.");
-
-        ConcurrentMapCacheManager cacheManager = new ConcurrentMapCacheManager();
-        cacheManager.setCacheNames(java.util.Arrays.asList("query-cache"));
-        return cacheManager;
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public CacheConfigurationValidator cacheConfigurationValidator(CqrsProperties cqrsProperties) {
-        return new CacheConfigurationValidator(cqrsProperties);
+        return new DefaultQueryBus(applicationContext, correlationContext, autoValidationProcessor,
+                authorizationService, cacheAdapter, meterRegistry);
     }
 }

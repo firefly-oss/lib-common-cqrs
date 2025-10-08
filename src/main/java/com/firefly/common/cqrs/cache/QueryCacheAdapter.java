@@ -16,8 +16,8 @@
 
 package com.firefly.common.cqrs.cache;
 
-import com.firefly.common.cache.FireflyCache;
-import com.firefly.common.cache.FireflyCacheManager;
+import com.firefly.common.cache.core.CacheAdapter;
+import com.firefly.common.cache.manager.FireflyCacheManager;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
@@ -36,7 +36,7 @@ import java.util.Optional;
 public class QueryCacheAdapter {
 
     private static final String DEFAULT_CACHE_NAME = "query-cache";
-    
+
     private final FireflyCacheManager cacheManager;
     private final String cacheName;
 
@@ -71,26 +71,24 @@ public class QueryCacheAdapter {
      */
     @SuppressWarnings("unchecked")
     public <R> Mono<R> get(String cacheKey, Class<R> resultType) {
-        return Mono.fromCallable(() -> {
-            FireflyCache cache = cacheManager.getCache(cacheName);
-            Optional<Object> cachedValue = cache.get(cacheKey);
-            
-            if (cachedValue.isPresent()) {
-                Object value = cachedValue.get();
-                if (resultType.isInstance(value)) {
+        CacheAdapter cache = cacheManager.getCache(cacheName);
+        if (cache == null) {
+            log.warn("Cache '{}' not found", cacheName);
+            return Mono.empty();
+        }
+
+        return cache.<String, R>get(cacheKey, resultType)
+            .flatMap(optionalValue -> {
+                if (optionalValue.isPresent()) {
+                    R value = optionalValue.get();
                     log.debug("CQRS Query Cache Hit - CacheKey: {}, ResultType: {}",
                             cacheKey, value.getClass().getSimpleName());
-                    return (R) value;
+                    return Mono.just(value);
                 } else {
-                    log.warn("CQRS Query Cache Type Mismatch - CacheKey: {}, Expected: {}, Found: {}",
-                            cacheKey, resultType.getSimpleName(), value.getClass().getSimpleName());
-                    return null;
+                    log.debug("CQRS Query Cache Miss - CacheKey: {}", cacheKey);
+                    return Mono.empty();
                 }
-            } else {
-                log.debug("CQRS Query Cache Miss - CacheKey: {}", cacheKey);
-                return null;
-            }
-        });
+            });
     }
 
     /**
@@ -102,14 +100,19 @@ public class QueryCacheAdapter {
      * @return a Mono that completes when the result is cached
      */
     public <R> Mono<Void> put(String cacheKey, R result) {
-        return Mono.fromRunnable(() -> {
-            if (result != null) {
-                FireflyCache cache = cacheManager.getCache(cacheName);
-                cache.put(cacheKey, result);
-                log.debug("CQRS Query Result Cached - CacheKey: {}, ResultType: {}",
-                        cacheKey, result.getClass().getSimpleName());
-            }
-        });
+        if (result == null) {
+            return Mono.empty();
+        }
+
+        CacheAdapter cache = cacheManager.getCache(cacheName);
+        if (cache == null) {
+            log.warn("Cache '{}' not found", cacheName);
+            return Mono.empty();
+        }
+
+        return cache.put(cacheKey, result)
+            .doOnSuccess(v -> log.debug("CQRS Query Result Cached - CacheKey: {}, ResultType: {}",
+                    cacheKey, result.getClass().getSimpleName()));
     }
 
     /**
@@ -122,28 +125,36 @@ public class QueryCacheAdapter {
      * @return a Mono that completes when the result is cached
      */
     public <R> Mono<Void> put(String cacheKey, R result, Duration ttl) {
-        return Mono.fromRunnable(() -> {
-            if (result != null) {
-                FireflyCache cache = cacheManager.getCache(cacheName);
-                cache.put(cacheKey, result, ttl);
-                log.debug("CQRS Query Result Cached with TTL - CacheKey: {}, ResultType: {}, TTL: {}",
-                        cacheKey, result.getClass().getSimpleName(), ttl);
-            }
-        });
+        if (result == null) {
+            return Mono.empty();
+        }
+
+        CacheAdapter cache = cacheManager.getCache(cacheName);
+        if (cache == null) {
+            log.warn("Cache '{}' not found", cacheName);
+            return Mono.empty();
+        }
+
+        return cache.put(cacheKey, result, ttl)
+            .doOnSuccess(v -> log.debug("CQRS Query Result Cached with TTL - CacheKey: {}, ResultType: {}, TTL: {}",
+                    cacheKey, result.getClass().getSimpleName(), ttl));
     }
 
     /**
      * Evicts a cached query result.
      *
      * @param cacheKey the cache key to evict
-     * @return a Mono that completes when the cache entry is evicted
+     * @return a Mono that emits true if the cache entry was evicted, false otherwise
      */
-    public Mono<Void> evict(String cacheKey) {
-        return Mono.fromRunnable(() -> {
-            FireflyCache cache = cacheManager.getCache(cacheName);
-            cache.evict(cacheKey);
-            log.debug("CQRS Query Cache Evicted - CacheKey: {}", cacheKey);
-        });
+    public Mono<Boolean> evict(String cacheKey) {
+        CacheAdapter cache = cacheManager.getCache(cacheName);
+        if (cache == null) {
+            log.warn("Cache '{}' not found", cacheName);
+            return Mono.just(false);
+        }
+
+        return cache.evict(cacheKey)
+            .doOnSuccess(evicted -> log.debug("CQRS Query Cache Evicted - CacheKey: {}, Success: {}", cacheKey, evicted));
     }
 
     /**
@@ -152,11 +163,14 @@ public class QueryCacheAdapter {
      * @return a Mono that completes when the cache is cleared
      */
     public Mono<Void> clear() {
-        return Mono.fromRunnable(() -> {
-            FireflyCache cache = cacheManager.getCache(cacheName);
-            cache.clear();
-            log.debug("CQRS Query Cache Cleared - Cache: {}", cacheName);
-        });
+        CacheAdapter cache = cacheManager.getCache(cacheName);
+        if (cache == null) {
+            log.warn("Cache '{}' not found", cacheName);
+            return Mono.empty();
+        }
+
+        return cache.clear()
+            .doOnSuccess(v -> log.debug("CQRS Query Cache Cleared - Cache: {}", cacheName));
     }
 
     /**

@@ -79,6 +79,12 @@ public class CqrsProperties {
         private Duration cacheTtl = Duration.ofMinutes(15);
 
         /**
+         * Name of the cache to use for query results.
+         * This should match a cache name configured in lib-common-cache.
+         */
+        private String cacheName = "query-cache";
+
+        /**
          * Whether to enable query metrics.
          */
         private boolean metricsEnabled = true;
@@ -89,8 +95,10 @@ public class CqrsProperties {
         private boolean tracingEnabled = true;
 
         /**
-         * Cache configuration.
+         * Cache configuration (deprecated - use lib-common-cache configuration instead).
+         * @deprecated Use firefly.cache.* properties from lib-common-cache instead
          */
+        @Deprecated
         private Cache cache = new Cache();
     }
 
