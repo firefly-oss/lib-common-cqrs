@@ -151,16 +151,22 @@ public class CqrsAutoConfiguration {
     @Bean("cqrsQueryCacheManager")
     @ConditionalOnBean(CacheManagerFactory.class)
     @ConditionalOnMissingBean(name = "cqrsQueryCacheManager")
-    public FireflyCacheManager cqrsQueryCacheManager(CacheManagerFactory factory) {
+    public FireflyCacheManager cqrsQueryCacheManager(CacheManagerFactory factory, CqrsProperties properties) {
         log.info("Creating dedicated CQRS query cache manager");
         
         String description = "CQRS Query Results Cache - Caches query handler results for improved performance";
         
+        // Use AUTO to let lib-common-cache select the best available provider (Redis, Hazelcast, JCache, or Caffeine)
+        // Default TTL comes from CQRS properties (firefly.cqrs.query.cache-ttl)
+        Duration ttl = properties.getQuery() != null && properties.getQuery().getCacheTtl() != null
+                ? properties.getQuery().getCacheTtl()
+                : Duration.ofMinutes(15);
+        
         return factory.createCacheManager(
                 "cqrs-queries",
-                CacheType.REDIS,  // Prefer Redis for distributed query caching
+                CacheType.AUTO,
                 "firefly:cqrs:queries",
-                Duration.ofMinutes(30),  // Default 30 min TTL for query results
+                ttl,
                 description,
                 "lib-common-cqrs.CqrsAutoConfiguration"
         );

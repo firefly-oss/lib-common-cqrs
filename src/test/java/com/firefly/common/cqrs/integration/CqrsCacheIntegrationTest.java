@@ -64,6 +64,7 @@ class CqrsCacheIntegrationTest {
     private DefaultQueryBus queryBus;
 
     @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("cqrsQueryCacheManager")
     private FireflyCacheManager cacheManager;
 
     @Autowired
@@ -247,7 +248,7 @@ class CqrsCacheIntegrationTest {
         StepVerifier.create(cacheManager.getStats())
             .assertNext(stats -> {
                 assertThat(stats).isNotNull();
-                assertThat(stats.getCacheName()).isEqualTo("default");
+                assertThat(stats.getCacheName()).isEqualTo("cqrs-queries");
                 assertThat(stats.getCacheType()).isEqualTo(CacheType.CAFFEINE);
                 assertThat(stats.getHitCount()).isGreaterThan(0);
             })
