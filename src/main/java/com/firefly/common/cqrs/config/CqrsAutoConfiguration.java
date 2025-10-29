@@ -16,8 +16,12 @@
 
 package com.firefly.common.cqrs.config;
 
+import com.firefly.common.cache.core.CacheType;
+import com.firefly.common.cache.factory.CacheManagerFactory;
 import com.firefly.common.cache.manager.FireflyCacheManager;
 import com.firefly.common.cqrs.cache.QueryCacheAdapter;
+
+import java.time.Duration;
 import com.firefly.common.cqrs.command.CommandBus;
 import com.firefly.common.cqrs.command.CommandHandlerRegistry;
 import com.firefly.common.cqrs.command.CommandMetricsService;
@@ -138,11 +142,36 @@ public class CqrsAutoConfiguration {
         return new DefaultCommandBus(handlerRegistry, validationService, authorizationService, metricsService, correlationContext);
     }
 
+    /**
+     * Creates a dedicated cache manager for CQRS query results.
+     * <p>
+     * This cache manager is independent from other application caches,
+     * with its own key prefix to avoid collisions.
+     */
+    @Bean("cqrsQueryCacheManager")
+    @ConditionalOnBean(CacheManagerFactory.class)
+    @ConditionalOnMissingBean(name = "cqrsQueryCacheManager")
+    public FireflyCacheManager cqrsQueryCacheManager(CacheManagerFactory factory) {
+        log.info("Creating dedicated CQRS query cache manager");
+        
+        String description = "CQRS Query Results Cache - Caches query handler results for improved performance";
+        
+        return factory.createCacheManager(
+                "cqrs-queries",
+                CacheType.REDIS,  // Prefer Redis for distributed query caching
+                "firefly:cqrs:queries",
+                Duration.ofMinutes(30),  // Default 30 min TTL for query results
+                description,
+                "lib-common-cqrs.CqrsAutoConfiguration"
+        );
+    }
+
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(FireflyCacheManager.class)
-    public QueryCacheAdapter queryCacheAdapter(FireflyCacheManager cacheManager) {
-        log.info("Configuring CQRS Query Cache Adapter with FireflyCacheManager");
+    @ConditionalOnBean(name = "cqrsQueryCacheManager")
+    public QueryCacheAdapter queryCacheAdapter(
+            @Qualifier("cqrsQueryCacheManager") FireflyCacheManager cacheManager) {
+        log.info("Configuring CQRS Query Cache Adapter with dedicated cache manager");
         return new QueryCacheAdapter(cacheManager);
     }
 
